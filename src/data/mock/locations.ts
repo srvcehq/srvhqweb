@@ -1,0 +1,72 @@
+import { Location } from "../types";
+
+export const mockLocations: Omit<Location, "id" | "created_date" | "updated_date">[] = [
+  // Metro Properties LLC (contact_id will be "21" - index 20 in contacts array, 0-based)
+  {
+    contact_id: "21",
+    name: "Downtown Office Complex",
+    address_line1: "1800 California St",
+    city: "Denver",
+    state: "CO",
+    zip: "80202",
+    notes: "Main entrance on California St, check in with security",
+    is_primary: true,
+    company_id: "1",
+  },
+  {
+    contact_id: "21",
+    name: "Lakewood Business Park",
+    address_line1: "445 Union Blvd",
+    city: "Lakewood",
+    state: "CO",
+    zip: "80228",
+    notes: "Gate code: 4455#",
+    is_primary: false,
+    company_id: "1",
+  },
+  {
+    contact_id: "21",
+    name: "Cherry Creek Retail Center",
+    address_line1: "2900 E 1st Ave",
+    city: "Denver",
+    state: "CO",
+    zip: "80206",
+    is_primary: false,
+    company_id: "1",
+  },
+
+  // Sunrise HOA (contact_id will be "22" - index 21 in contacts array)
+  {
+    contact_id: "22",
+    name: "Sunrise Meadows - Phase 1",
+    address_line1: "100 Sunrise Dr",
+    city: "Aurora",
+    state: "CO",
+    zip: "80012",
+    notes: "Common areas only, 3 pocket parks",
+    is_primary: true,
+    company_id: "1",
+  },
+  {
+    contact_id: "22",
+    name: "Sunrise Meadows - Phase 2",
+    address_line1: "200 Sunrise Dr",
+    city: "Aurora",
+    state: "CO",
+    zip: "80012",
+    notes: "Includes playground perimeter and walking paths",
+    is_primary: false,
+    company_id: "1",
+  },
+  {
+    contact_id: "22",
+    name: "Sunrise Clubhouse Grounds",
+    address_line1: "50 Clubhouse Ln",
+    city: "Aurora",
+    state: "CO",
+    zip: "80012",
+    notes: "Pool area landscaping, high visibility",
+    is_primary: false,
+    company_id: "1",
+  },
+];

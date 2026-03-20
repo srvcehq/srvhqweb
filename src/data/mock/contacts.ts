@@ -1,0 +1,26 @@
+import { Contact } from "../types";
+
+export const mockContacts: Omit<Contact, "id" | "created_date" | "updated_date">[] = [
+  { first_name: "Sarah", last_name: "Mitchell", phone: "303-555-0101", email: "sarah.mitchell@email.com", address_line1: "742 Maple Dr", city: "Denver", state: "CO", zip: "80202", company_id: "1", notes: "Prefers morning appointments" },
+  { first_name: "James", last_name: "Anderson", phone: "303-555-0102", email: "james.anderson@email.com", address_line1: "1205 Elm St", city: "Denver", state: "CO", zip: "80203", company_id: "1" },
+  { first_name: "Maria", last_name: "Garcia", phone: "303-555-0103", email: "maria.garcia@email.com", address_line1: "890 Oak Ave", city: "Lakewood", state: "CO", zip: "80226", company_id: "1" },
+  { first_name: "Robert", last_name: "Chen", phone: "303-555-0104", email: "robert.chen@email.com", address_line1: "3301 Pine Blvd", city: "Aurora", state: "CO", zip: "80010", company_id: "1" },
+  { first_name: "Emily", last_name: "Thompson", phone: "303-555-0105", email: "emily.thompson@email.com", address_line1: "456 Birch Ln", city: "Denver", state: "CO", zip: "80204", company_id: "1" },
+  { first_name: "David", last_name: "Wilson", phone: "303-555-0106", email: "david.wilson@email.com", address_line1: "2100 Cedar Ct", city: "Littleton", state: "CO", zip: "80120", company_id: "1" },
+  { first_name: "Jennifer", last_name: "Brown", phone: "303-555-0107", email: "jennifer.brown@email.com", address_line1: "567 Spruce Way", city: "Denver", state: "CO", zip: "80205", company_id: "1" },
+  { first_name: "Michael", last_name: "Davis", phone: "303-555-0108", email: "michael.davis@email.com", address_line1: "8901 Aspen Dr", city: "Englewood", state: "CO", zip: "80110", company_id: "1" },
+  { first_name: "Lisa", last_name: "Martinez", phone: "303-555-0109", email: "lisa.martinez@email.com", address_line1: "123 Willow St", city: "Denver", state: "CO", zip: "80206", company_id: "1" },
+  { first_name: "William", last_name: "Taylor", phone: "303-555-0110", email: "william.taylor@email.com", address_line1: "4455 Poplar Ave", city: "Arvada", state: "CO", zip: "80002", company_id: "1", notes: "Large backyard, HOA restrictions" },
+  { first_name: "Amanda", last_name: "Johnson", phone: "303-555-0111", email: "amanda.johnson@email.com", address_line1: "678 Redwood Pl", city: "Denver", state: "CO", zip: "80207", company_id: "1" },
+  { first_name: "Christopher", last_name: "Lee", phone: "303-555-0112", email: "chris.lee@email.com", address_line1: "901 Cottonwood Dr", city: "Westminster", state: "CO", zip: "80030", company_id: "1" },
+  { first_name: "Rachel", last_name: "White", phone: "303-555-0113", email: "rachel.white@email.com", address_line1: "234 Dogwood Ln", city: "Denver", state: "CO", zip: "80209", company_id: "1" },
+  { first_name: "Daniel", last_name: "Harris", phone: "303-555-0114", email: "daniel.harris@email.com", address_line1: "5670 Juniper Way", city: "Thornton", state: "CO", zip: "80229", company_id: "1" },
+  { first_name: "Nicole", last_name: "Clark", phone: "303-555-0115", email: "nicole.clark@email.com", address_line1: "8910 Magnolia St", city: "Denver", state: "CO", zip: "80210", company_id: "1" },
+  { first_name: "Kevin", last_name: "Robinson", phone: "303-555-0116", email: "kevin.robinson@email.com", address_line1: "345 Linden Ave", city: "Broomfield", state: "CO", zip: "80020", company_id: "1" },
+  { first_name: "Stephanie", last_name: "Lewis", phone: "303-555-0117", email: "stephanie.lewis@email.com", address_line1: "6789 Hickory Ct", city: "Denver", state: "CO", zip: "80211", company_id: "1" },
+  { first_name: "Andrew", last_name: "Walker", phone: "303-555-0118", email: "andrew.walker@email.com", address_line1: "1234 Sycamore Blvd", city: "Golden", state: "CO", zip: "80401", company_id: "1" },
+  { first_name: "Patricia", last_name: "Hall", phone: "303-555-0119", email: "patricia.hall@email.com", address_line1: "5678 Chestnut Dr", city: "Denver", state: "CO", zip: "80212", company_id: "1", isArchived: true, archived_at: "2025-12-01T00:00:00.000Z" },
+  { first_name: "Mark", last_name: "Young", phone: "303-555-0120", email: "mark.young@email.com", address_line1: "9012 Hawthorn Way", city: "Centennial", state: "CO", zip: "80112", company_id: "1" },
+  { first_name: "Greg", last_name: "Hartwell", phone: "303-555-0121", email: "greg.hartwell@metroproperties.com", address_line1: "1800 California St", city: "Denver", state: "CO", zip: "80202", company_id: "1", contact_type: "commercial" as const, company_name: "Metro Properties LLC", notes: "Property manager for 3 commercial locations in Denver metro" },
+  { first_name: "Linda", last_name: "Nakamura", phone: "303-555-0122", email: "linda@sunrisehoa.org", address_line1: "50 Clubhouse Ln", city: "Aurora", state: "CO", zip: "80012", company_id: "1", contact_type: "commercial" as const, company_name: "Sunrise HOA", notes: "HOA board president, manages 3 common areas across the community" },
+];

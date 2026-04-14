@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { db } from "@/data/api";
 import { Payment, Bid, Project, Contact } from "@/data/types";
+import { findContactName } from "@/lib/contact-display";
 import { useCompany } from "@/providers/company-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -145,10 +146,7 @@ export default function FinancialsPage() {
       .slice(0, 8);
   }, [payments]);
 
-  const getContactName = (contactId: string) => {
-    const c = contacts.find((ct) => ct.id === contactId);
-    return c ? `${c.first_name} ${c.last_name}` : "Unknown";
-  };
+  const getContactName = (contactId: string) => findContactName(contacts, contactId);
 
   const statusColor = (status: string) => {
     switch (status) {

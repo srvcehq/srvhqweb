@@ -31,7 +31,7 @@ export function getLifecycleState(
   allBids: Bid[] = []
 ): LifecycleState {
   // If archived, always return archived
-  if (project.archived === true) {
+  if (project.archived_at) {
     return "archived";
   }
 
@@ -111,7 +111,7 @@ export function categorizeProjectsBySection(
 
   projects.forEach((project) => {
     // Archived projects always go to archived section
-    if (project.archived === true) {
+    if (project.archived_at) {
       archived.push(project);
       return;
     }

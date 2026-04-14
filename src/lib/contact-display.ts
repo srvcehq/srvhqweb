@@ -1,4 +1,4 @@
-import type { Contact, Location } from "@/data/types";
+import type { Contact, Employee, Location } from "@/data/types";
 
 /**
  * Returns the display name for a contact, accounting for commercial contacts with locations.
@@ -19,6 +19,32 @@ export function getDisplayName(
   }
 
   return `${contact.first_name} ${contact.last_name}`;
+}
+
+/**
+ * Finds a contact by ID and returns "First Last". Useful for lookup-by-ID patterns
+ * that don't need commercial/location-aware display names.
+ */
+export function findContactName(
+  contacts: Contact[],
+  contactId: string | undefined
+): string {
+  if (!contactId) return "Unknown";
+  const contact = contacts.find((c) => c.id === contactId);
+  return contact ? `${contact.first_name} ${contact.last_name}` : "Unknown";
+}
+
+/**
+ * Finds an employee by ID and returns their display name or "First Last".
+ */
+export function findEmployeeName(
+  employees: Employee[],
+  employeeId: string
+): string {
+  const employee = employees.find((e) => e.id === employeeId);
+  return employee
+    ? employee.display_name || `${employee.first_name} ${employee.last_name}`
+    : "Unknown";
 }
 
 /**

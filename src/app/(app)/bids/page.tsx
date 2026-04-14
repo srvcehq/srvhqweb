@@ -1,9 +1,22 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { db } from "@/data/api";
 import { useCompany } from "@/providers/company-provider";
+import { routes } from "@/lib/routes";
+import QuickBidDialog from "@/components/bids/quick-bid-dialog";
+import { findContactName } from "@/lib/contact-display";
+import {
+  deriveBidDisplayStatus,
+  getBidDisplayConfig,
+  archiveBidWithProject,
+  unarchiveBidWithProject,
+  canDeleteBid,
+  type BidDisplayStatus,
+} from "@/lib/bid-project-sync";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,36 +62,6 @@ import {
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
-/* Status config                                                       */
-/* ------------------------------------------------------------------ */
-
-const STATUS_CONFIG: Record<
-  string,
-  { label: string; className: string; icon: React.ReactNode }
-> = {
-  draft: {
-    label: "Draft",
-    className: "bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800/40 dark:text-gray-400",
-    icon: <Pencil className="w-3.5 h-3.5" />,
-  },
-  sent: {
-    label: "Sent",
-    className: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400",
-    icon: <Send className="w-3.5 h-3.5" />,
-  },
-  accepted: {
-    label: "Accepted",
-    className: "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400",
-    icon: <CheckCircle2 className="w-3.5 h-3.5" />,
-  },
-  declined: {
-    label: "Declined",
-    className: "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400",
-    icon: <XCircle className="w-3.5 h-3.5" />,
-  },
-};
-
-/* ------------------------------------------------------------------ */
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
 
@@ -110,18 +93,62 @@ function timeAgo(dateStr?: string): string {
   return `${Math.floor(diffDays / 30)}mo ago`;
 }
 
+/** Map derived display status to a background color for the row icon */
+function statusIconBg(status: BidDisplayStatus): string {
+  switch (status) {
+    case "accepted":
+    case "completed":
+      return "bg-green-100 dark:bg-green-900/30";
+    case "sent":
+    case "not_accepted":
+      return "bg-blue-100 dark:bg-blue-900/30";
+    case "accepted_no_date":
+      return "bg-purple-100 dark:bg-purple-900/30";
+    case "declined":
+      return "bg-red-100 dark:bg-red-900/30";
+    case "archived":
+      return "bg-gray-100 dark:bg-gray-800/40";
+    default:
+      return "bg-muted";
+  }
+}
+
+/** Map derived display status to an icon */
+function statusIcon(status: BidDisplayStatus): React.ReactNode {
+  switch (status) {
+    case "accepted":
+    case "completed":
+      return <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />;
+    case "sent":
+      return <Send className="w-3.5 h-3.5 text-blue-600" />;
+    case "not_accepted":
+      return <Clock className="w-3.5 h-3.5 text-blue-600" />;
+    case "accepted_no_date":
+      return <CheckCircle2 className="w-3.5 h-3.5 text-purple-600" />;
+    case "declined":
+      return <XCircle className="w-3.5 h-3.5 text-red-600" />;
+    case "archived":
+      return <Archive className="w-3.5 h-3.5 text-gray-500" />;
+    default:
+      return <Pencil className="w-3.5 h-3.5" />;
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Page Component                                                      */
 /* ------------------------------------------------------------------ */
 
 export default function BidsPage() {
   const { currentCompanyId } = useCompany();
+  const router = useRouter();
+  const queryClient = useQueryClient();
 
   // State
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [visibilityFilter, setVisibilityFilter] = useState("active");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showQuickBid, setShowQuickBid] = useState(false);
   const [viewingBid, setViewingBid] = useState<string | null>(null);
 
   // Data fetching
@@ -141,22 +168,62 @@ export default function BidsPage() {
     queryFn: () => db.Project.filter({ company_id: currentCompanyId }),
   });
 
-  // Helpers
-  const getContactName = (contactId: string) => {
-    if (!contactId) return "No client linked";
-    const c = contacts.find((x) => x.id === contactId);
-    return c ? `${c.first_name} ${c.last_name}` : "Unknown";
-  };
+  const getContactName = (contactId: string) =>
+    !contactId ? "No client linked" : findContactName(contacts, contactId);
 
   const hasProject = (bidId: string) => {
     return projects.some((p) => p.bid_id === bidId);
   };
 
-  // Filter bids
+  /* ---------------------------------------------------------------- */
+  /* Action handlers                                                   */
+  /* ---------------------------------------------------------------- */
+
+  const handleArchive = async (bid: (typeof allBids)[number]) => {
+    try {
+      await archiveBidWithProject(bid, projects);
+      queryClient.invalidateQueries({ queryKey: ["bids"] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["projects-bids"] });
+    } catch {
+      toast.error("Failed to archive bid");
+    }
+  };
+
+  const handleUnarchive = async (bid: (typeof allBids)[number]) => {
+    try {
+      await unarchiveBidWithProject(bid, projects);
+      queryClient.invalidateQueries({ queryKey: ["bids"] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["projects-bids"] });
+    } catch {
+      toast.error("Failed to unarchive bid");
+    }
+  };
+
+  const handleDelete = async (bid: (typeof allBids)[number]) => {
+    if (!canDeleteBid(bid, projects)) {
+      toast.error("Cannot delete a bid linked to a project");
+      return;
+    }
+    try {
+      await db.Bid.delete(bid.id);
+      queryClient.invalidateQueries({ queryKey: ["bids"] });
+    } catch {
+      toast.error("Failed to delete bid");
+    }
+  };
+
+  /* ---------------------------------------------------------------- */
+  /* Filtering                                                         */
+  /* ---------------------------------------------------------------- */
+
+  // Split by archived_at for visibility filter
   const activeBids = allBids.filter((b) => !b.archived_at);
   const archivedBids = allBids.filter((b) => !!b.archived_at);
 
   const displayedBids = useMemo(() => {
+    // Step 1: visibility filter (active vs archived vs all)
     let bids =
       visibilityFilter === "archived"
         ? archivedBids
@@ -164,10 +231,14 @@ export default function BidsPage() {
           ? allBids
           : activeBids;
 
+    // Step 2: status filter — uses derived display status
     if (statusFilter !== "all") {
-      bids = bids.filter((b) => b.status === statusFilter);
+      bids = bids.filter(
+        (b) => deriveBidDisplayStatus(b, projects) === statusFilter
+      );
     }
 
+    // Step 3: search
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       bids = bids.filter((b) => {
@@ -178,24 +249,41 @@ export default function BidsPage() {
     }
 
     return bids;
-  }, [allBids, activeBids, archivedBids, visibilityFilter, statusFilter, searchQuery, contacts]);
+  }, [allBids, activeBids, archivedBids, visibilityFilter, statusFilter, searchQuery, contacts, projects]);
 
-  // Stats
-  const draftCount = activeBids.filter((b) => b.status === "draft").length;
-  const sentCount = activeBids.filter((b) => b.status === "sent").length;
-  const acceptedCount = activeBids.filter((b) => b.status === "accepted").length;
+  // Stats — computed from active (non-archived) bids
+  const draftCount = activeBids.filter(
+    (b) => deriveBidDisplayStatus(b, projects) === "draft"
+  ).length;
+  const sentCount = activeBids.filter((b) => {
+    const ds = deriveBidDisplayStatus(b, projects);
+    return ds === "sent" || ds === "not_accepted";
+  }).length;
+  const acceptedCount = activeBids.filter((b) => {
+    const ds = deriveBidDisplayStatus(b, projects);
+    return ds === "accepted" || ds === "accepted_no_date" || ds === "completed";
+  }).length;
   const totalPipelineValue = activeBids
-    .filter((b) => b.status === "sent" || b.status === "draft")
+    .filter((b) => {
+      const ds = deriveBidDisplayStatus(b, projects);
+      return ds === "sent" || ds === "draft" || ds === "not_accepted";
+    })
     .reduce((sum, b) => sum + (b.bid_total || 0), 0);
 
   // Viewing bid details
   const selectedBid = viewingBid
     ? allBids.find((b) => b.id === viewingBid)
     : null;
+  const selectedBidDisplayStatus = selectedBid
+    ? deriveBidDisplayStatus(selectedBid, projects)
+    : null;
+  const selectedBidConfig = selectedBidDisplayStatus
+    ? getBidDisplayConfig(selectedBidDisplayStatus)
+    : null;
 
   return (
-    <div className="p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 md:p-8 max-w-full overflow-x-hidden">
+      <div className="max-w-7xl mx-auto space-y-6 min-w-0">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -284,15 +372,19 @@ export default function BidsPage() {
             />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
               <SelectItem value="draft">Draft</SelectItem>
               <SelectItem value="sent">Sent</SelectItem>
+              <SelectItem value="not_accepted">Not Accepted Yet</SelectItem>
+              <SelectItem value="accepted_no_date">Accepted - No Date</SelectItem>
               <SelectItem value="accepted">Accepted</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
               <SelectItem value="declined">Declined</SelectItem>
+              <SelectItem value="archived">Archived</SelectItem>
             </SelectContent>
           </Select>
           <Select value={visibilityFilter} onValueChange={setVisibilityFilter}>
@@ -335,8 +427,8 @@ export default function BidsPage() {
             ) : (
               <div className="divide-y divide-border">
                 {displayedBids.map((bid) => {
-                  const statusCfg =
-                    STATUS_CONFIG[bid.status] || STATUS_CONFIG.draft;
+                  const displayStatus = deriveBidDisplayStatus(bid, projects);
+                  const statusCfg = getBidDisplayConfig(displayStatus);
                   const contactName = getContactName(bid.contact_id);
                   const linkedProject = hasProject(bid.id);
 
@@ -348,17 +440,9 @@ export default function BidsPage() {
                       <div className="flex items-start gap-4">
                         {/* Status icon */}
                         <div
-                          className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                            bid.status === "accepted"
-                              ? "bg-green-100 dark:bg-green-900/30"
-                              : bid.status === "sent"
-                                ? "bg-blue-100 dark:bg-blue-900/30"
-                                : bid.status === "declined"
-                                  ? "bg-red-100 dark:bg-red-900/30"
-                                  : "bg-muted"
-                          }`}
+                          className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${statusIconBg(displayStatus)}`}
                         >
-                          {statusCfg.icon}
+                          {statusIcon(displayStatus)}
                         </div>
 
                         {/* Main content */}
@@ -486,17 +570,24 @@ export default function BidsPage() {
                               )}
                               <DropdownMenuSeparator />
                               {!bid.archived_at ? (
-                                <DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleArchive(bid)}
+                                >
                                   <Archive className="w-4 h-4 mr-2" />
                                   Archive
                                 </DropdownMenuItem>
                               ) : (
-                                <DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleUnarchive(bid)}
+                                >
                                   <Archive className="w-4 h-4 mr-2" />
                                   Unarchive
                                 </DropdownMenuItem>
                               )}
-                              <DropdownMenuItem className="text-red-600">
+                              <DropdownMenuItem
+                                className="text-red-600"
+                                onClick={() => handleDelete(bid)}
+                              >
                                 <Trash2 className="w-4 h-4 mr-2" />
                                 Delete
                               </DropdownMenuItem>
@@ -512,45 +603,54 @@ export default function BidsPage() {
           </CardContent>
         </Card>
 
-        {/* Create Bid Dialog (stub) */}
+        {/* Create Bid Dialog */}
         <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Create New Bid</DialogTitle>
               <DialogDescription>
-                Start a new bid proposal for a client. Choose between quick bid,
-                detailed line-item bid, or tiered good/better/best pricing.
+                Start a new bid proposal for a client.
               </DialogDescription>
             </DialogHeader>
             <div className="py-6 space-y-4">
               <div className="grid grid-cols-1 gap-3">
-                <button className="p-4 rounded-lg border-2 border-border hover:border-green-400 transition-colors text-left">
+                <button
+                  className="p-4 rounded-lg border-2 border-border hover:border-green-400 transition-colors text-left"
+                  onClick={() => {
+                    setShowCreateDialog(false);
+                    router.push(routes.bidsEstimate);
+                  }}
+                >
+                  <div className="font-medium text-foreground">Live Estimate</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Real-time pricing tool. Build and adjust estimates on the fly.
+                  </div>
+                </button>
+                <button
+                  className="p-4 rounded-lg border-2 border-border hover:border-green-400 transition-colors text-left"
+                  onClick={() => {
+                    setShowCreateDialog(false);
+                    setShowQuickBid(true);
+                  }}
+                >
                   <div className="font-medium text-foreground">Quick Bid</div>
                   <div className="text-xs text-muted-foreground mt-1">
                     Simple total with optional line items. Best for small jobs.
                   </div>
                 </button>
-                <button className="p-4 rounded-lg border-2 border-border hover:border-green-400 transition-colors text-left">
+                <button
+                  className="p-4 rounded-lg border-2 border-border hover:border-green-400 transition-colors text-left"
+                  onClick={() => {
+                    setShowCreateDialog(false);
+                    router.push(routes.bidsCreate);
+                  }}
+                >
                   <div className="font-medium text-foreground">Detailed Bid</div>
                   <div className="text-xs text-muted-foreground mt-1">
                     Full line-item breakdown with overhead, profit, and labor
                     calculations.
                   </div>
                 </button>
-                <button className="p-4 rounded-lg border-2 border-border hover:border-green-400 transition-colors text-left">
-                  <div className="font-medium text-foreground">
-                    Good / Better / Best
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Three-tier pricing options. Let the client choose their
-                    level.
-                  </div>
-                </button>
-              </div>
-              <div className="rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800/40 p-3 text-sm text-amber-800">
-                The full bid creation wizard is coming soon. This will include
-                client selection, line items, overhead, and deposit
-                configuration.
               </div>
             </div>
             <DialogFooter>
@@ -564,6 +664,9 @@ export default function BidsPage() {
           </DialogContent>
         </Dialog>
 
+        {/* Quick Bid Dialog */}
+        <QuickBidDialog open={showQuickBid} onOpenChange={setShowQuickBid} />
+
         {/* View Bid Dialog */}
         <Dialog
           open={!!viewingBid}
@@ -575,7 +678,7 @@ export default function BidsPage() {
                 {selectedBid?.title || "Bid Details"}
               </DialogTitle>
             </DialogHeader>
-            {selectedBid && (
+            {selectedBid && selectedBidConfig && (
               <div className="space-y-4 py-2">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -592,12 +695,9 @@ export default function BidsPage() {
                     </div>
                     <Badge
                       variant="outline"
-                      className={
-                        STATUS_CONFIG[selectedBid.status]?.className || ""
-                      }
+                      className={selectedBidConfig.className}
                     >
-                      {STATUS_CONFIG[selectedBid.status]?.label ||
-                        selectedBid.status}
+                      {selectedBidConfig.label}
                     </Badge>
                   </div>
                   <div>

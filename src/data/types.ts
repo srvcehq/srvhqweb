@@ -39,10 +39,12 @@ export interface Location extends BaseEntity {
   longitude?: number;
   notes?: string;
   is_primary?: boolean;
+  billing_type?: "per_visit" | "monthly_contract";
 }
 
 export interface Project extends BaseEntity {
   contact_id: string;
+  location_id?: string;
   title: string;
   description?: string;
   status?: "draft" | "proposed" | "scheduled" | "in_progress" | "completed" | "archived";
@@ -54,7 +56,7 @@ export interface Project extends BaseEntity {
   consecutive_days?: boolean;
   capacity_warn?: boolean;
   is_completed?: boolean;
-  archived?: boolean;
+  archived_at?: string | null;
   bid_id?: string;
   total_amount?: number;
   assigned_employee_ids?: string[];
@@ -122,6 +124,7 @@ export interface BidOverhead extends BaseEntity {
 export interface Payment extends BaseEntity {
   project_id?: string;
   contact_id: string;
+  location_id?: string;
   bid_id?: string;
   type: "deposit" | "final" | "invoice" | "maintenance";
   amount: number;
@@ -214,15 +217,21 @@ export interface MaintenanceVisit extends BaseEntity {
 export interface MaintenanceItem extends BaseEntity {
   name: string;
   description?: string;
-  default_price?: number;
-  category?: string;
-  unit?: string;
+  pricing_type: "per_unit" | "flat_rate" | "variable";
+  unit_label?: string;
+  price_per_unit?: number;
+  avg_minutes_per_unit?: number;
+  price_per_visit?: number;
+  suggested_min?: number;
+  suggested_max?: number;
+  is_active: boolean;
 }
 
 export interface ItemsCatalog extends BaseEntity {
   name: string;
   category?: string;
   unit: "ea" | "sq_ft" | "ton" | "hr" | "other";
+  pricing_strategy: "cost_plus" | "pre_marked";
   default_unit_cost?: number;
   default_sell_price?: number;
   vendor?: string;
@@ -236,11 +245,11 @@ export interface ItemCategory extends BaseEntity {
 
 export interface HardCost extends BaseEntity {
   name: string;
-  category?: string;
-  cost: number;
-  unit?: string;
-  vendor?: string;
+  monthly_cost: number;
+  category?: "equipment" | "insurance" | "rent" | "software" | "fuel" | "vehicle" | "other";
+  cost_basis?: "per_job" | "per_visit" | "per_hour" | "flat";
   notes?: string;
+  is_active: boolean;
 }
 
 export interface CompanySetting extends BaseEntity {
@@ -351,17 +360,21 @@ export interface Communication extends BaseEntity {
   contact_id: string;
   type: "email" | "sms" | "call" | "note";
   direction?: "inbound" | "outbound";
+  channel?: "reminder" | "payment_link" | "invoice" | "estimate" | "follow_up" | "manual" | "system";
   subject?: string;
   body?: string;
   sent_at?: string;
+  delivered_at?: string;
   status?: "sent" | "delivered" | "read" | "failed";
+  related_type?: "visit" | "invoice" | "bid" | "project" | "general";
+  related_id?: string;
 }
 
 export interface DoorToDoorPin extends BaseEntity {
   address: string;
   lat: number;
   lng: number;
-  status: "not_visited" | "visited" | "interested" | "not_interested" | "not_home";
+  status: "interested" | "follow_up" | "no_answer" | "not_interested" | "do_not_knock" | "made_sale" | "maintenance_customer";
   contact_id?: string;
   notes?: string;
   visited_at?: string;

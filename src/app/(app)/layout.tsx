@@ -27,6 +27,7 @@ import {
   MessageSquare,
   DoorOpen,
   Map,
+  Calculator,
   ClipboardList,
   X,
 } from "lucide-react";
@@ -121,6 +122,12 @@ const allNavigationItems: NavItem[] = [
     title: "Bids",
     url: routes.bids,
     icon: FileText,
+    permission: PERMISSIONS.VIEW_BIDS,
+  },
+  {
+    title: "Live Estimating",
+    url: routes.bidsEstimate,
+    icon: Calculator,
     permission: PERMISSIONS.VIEW_BIDS,
   },
   {
@@ -249,7 +256,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
 
   return (
     <TooltipProvider>
-      <div className="min-h-screen flex w-full bg-gradient-to-br from-app-bg-from via-app-bg-via to-app-bg-to relative">
+      <div className="h-screen flex w-full overflow-hidden bg-gradient-to-br from-app-bg-from via-app-bg-via to-app-bg-to relative">
         {/* Persistent Employee View Mode Banner */}
         {isEmployeeViewMode && (
           <div className="fixed bottom-4 left-4 z-50 animate-in slide-in-from-bottom-4">

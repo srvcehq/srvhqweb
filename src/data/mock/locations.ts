@@ -11,6 +11,7 @@ export const mockLocations: Omit<Location, "id" | "created_date" | "updated_date
     zip: "80202",
     notes: "Main entrance on California St, check in with security",
     is_primary: true,
+    billing_type: "monthly_contract",
     company_id: "1",
   },
   {
@@ -22,6 +23,7 @@ export const mockLocations: Omit<Location, "id" | "created_date" | "updated_date
     zip: "80228",
     notes: "Gate code: 4455#",
     is_primary: false,
+    billing_type: "per_visit",
     company_id: "1",
   },
   {
@@ -32,6 +34,7 @@ export const mockLocations: Omit<Location, "id" | "created_date" | "updated_date
     state: "CO",
     zip: "80206",
     is_primary: false,
+    billing_type: "per_visit",
     company_id: "1",
   },
 
@@ -45,6 +48,7 @@ export const mockLocations: Omit<Location, "id" | "created_date" | "updated_date
     zip: "80012",
     notes: "Common areas only, 3 pocket parks",
     is_primary: true,
+    billing_type: "monthly_contract",
     company_id: "1",
   },
   {
@@ -56,6 +60,7 @@ export const mockLocations: Omit<Location, "id" | "created_date" | "updated_date
     zip: "80012",
     notes: "Includes playground perimeter and walking paths",
     is_primary: false,
+    billing_type: "monthly_contract",
     company_id: "1",
   },
   {
@@ -67,6 +72,7 @@ export const mockLocations: Omit<Location, "id" | "created_date" | "updated_date
     zip: "80012",
     notes: "Pool area landscaping, high visibility",
     is_primary: false,
+    billing_type: "per_visit",
     company_id: "1",
   },
 ];

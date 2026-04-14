@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Mail, Phone, MapPin, FileText, MoreVertical,
   Pencil, Trash2, AlertCircle, Building2,
@@ -75,8 +74,6 @@ interface ContactCardProps {
   isArchived?: boolean;
   isCommercial?: boolean;
   locationCount?: number;
-  isSelected?: boolean;
-  onToggleSelect?: () => void;
 }
 
 export default function ContactCard({
@@ -88,8 +85,6 @@ export default function ContactCard({
   isArchived,
   isCommercial,
   locationCount,
-  isSelected,
-  onToggleSelect,
 }: ContactCardProps) {
   const router = useRouter();
 
@@ -151,18 +146,12 @@ export default function ContactCard({
 
   return (
     <Card
-      className={`hover:shadow-xl transition-all duration-300 ${cardBorderColor} bg-gradient-to-br ${cardGradient} cursor-pointer relative ${isSelected ? "ring-2 ring-green-500" : ""}`}
+      className={`hover:shadow-xl transition-all duration-300 ${cardBorderColor} bg-gradient-to-br ${cardGradient} cursor-pointer relative`}
       onClick={handleViewDetails}
     >
       <CardContent className="p-6">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-start gap-3">
-            <Checkbox
-              checked={isSelected}
-              onCheckedChange={onToggleSelect}
-              onClick={(e) => e.stopPropagation()}
-              className="mt-3"
-            />
             <div
               className={`w-14 h-14 bg-gradient-to-br ${avatarColor} rounded-full flex items-center justify-center shadow-lg`}
             >

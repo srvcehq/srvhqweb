@@ -4,7 +4,6 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Mail, Phone, MapPin, FileText, MoreVertical,
   Pencil, Trash2, AlertCircle, Building2,
@@ -73,8 +72,6 @@ interface ContactListItemProps {
   isArchived?: boolean;
   isCommercial?: boolean;
   locationCount?: number;
-  isSelected?: boolean;
-  onToggleSelect?: () => void;
 }
 
 export default function ContactListItem({
@@ -87,8 +84,6 @@ export default function ContactListItem({
   isArchived,
   isCommercial,
   locationCount,
-  isSelected,
-  onToggleSelect,
 }: ContactListItemProps) {
   const router = useRouter();
 
@@ -145,18 +140,9 @@ export default function ContactListItem({
     <div
       className={`flex items-center gap-4 p-4 hover:bg-accent transition-colors cursor-pointer ${
         !isLast ? "border-b border-border" : ""
-      } ${isSelected ? "bg-accent" : ""}`}
+      }`}
       onClick={handleViewDetails}
     >
-      {/* Checkbox */}
-      <div className="flex-shrink-0">
-        <Checkbox
-          checked={isSelected}
-          onCheckedChange={onToggleSelect}
-          onClick={(e) => e.stopPropagation()}
-        />
-      </div>
-
       {/* Avatar */}
       <div className="flex-shrink-0">
         <div

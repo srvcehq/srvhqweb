@@ -1,16 +1,16 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import React, { Suspense, useState, useMemo, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { db } from "@/data/api";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/providers/company-provider";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Plus, Search, UserPlus, LayoutGrid, List,
-  ArrowUpDown, ChevronRight, Archive, RotateCcw, Trash2,
+  ArrowUpDown,
 } from "lucide-react";
 import {
   Select,
@@ -19,42 +19,39 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { routes } from "@/lib/routes";
 
-import ContactCard from "@/components/contacts/contact-card";
-import ContactListItem from "@/components/contacts/contact-list-item";
+import ContactSection from "@/components/contacts/contact-section";
+import type { ContactWithStatus } from "@/components/contacts/contact-section";
 import CreateContactDialog from "@/components/contacts/create-contact-dialog";
 import EditContactDialog from "@/components/contacts/edit-contact-dialog";
 import DeleteContactDialog from "@/components/contacts/delete-contact-dialog";
-import BulkDeleteDialog from "@/components/contacts/bulk-delete-dialog";
-import RestoreContactsDialog from "@/components/contacts/restore-contacts-dialog";
-import PermanentDeleteDialog from "@/components/contacts/permanent-delete-dialog";
 import PageHeader from "@/components/shared/page-header";
 import type { Contact, MaintenancePlan, MaintenanceVisit, Project, Bid, Location } from "@/data/types";
 
-interface ContactWithStatus extends Contact {
-  isMaintenance: boolean;
-  isProject: boolean;
-  isLead: boolean;
-  isCommercial: boolean;
-  nextVisit: { visit_date: string } | null;
-  mostRecentProject: Project | null;
-  [key: string]: unknown;
+export default function ContactsPageWrapper() {
+  return (
+    <Suspense>
+      <ContactsPage />
+    </Suspense>
+  );
 }
 
-export default function ContactsPage() {
+function ContactsPage() {
+  const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [sortMode, setSortMode] = useState<"recent" | "alphabetical">("alphabetical");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+
+  // Auto-open create dialog when routed with ?create=true (e.g. from dashboard)
+  useEffect(() => {
+    if (searchParams.get("create") === "true") {
+      setShowCreateDialog(true);
+    }
+  }, [searchParams]);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [deletingContact, setDeletingContact] = useState<Contact | null>(null);
-  const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
-  const [showBulkDelete, setShowBulkDelete] = useState(false);
-  const [showRestore, setShowRestore] = useState(false);
-  const [showPermanentDelete, setShowPermanentDelete] = useState(false);
-  const queryClient = useQueryClient();
   const router = useRouter();
   const { currentCompanyId, isLoading: isLoadingCompany } = useCompany();
 
@@ -140,7 +137,7 @@ export default function ContactsPage() {
       );
 
       const hasActiveProjects = allProjects.some(
-        (p) => p.contact_id === contact.id && !p.archived
+        (p) => p.contact_id === contact.id && !p.archived_at
       );
 
       const hasActiveBids = allBids.some(
@@ -207,13 +204,24 @@ export default function ContactsPage() {
   // Filter by search, then categorize
   const { commercialContacts, maintenanceContacts, projectContacts, leadContacts, archivedContacts } = useMemo(() => {
     let filtered = contactsWithStatus.filter((contact) => {
+      if (!searchQuery) return true;
       const search = searchQuery.toLowerCase();
-      return (
+      // Search name, email, phone, address, company name
+      if (
         contact.first_name?.toLowerCase().includes(search) ||
         contact.last_name?.toLowerCase().includes(search) ||
         contact.email?.toLowerCase().includes(search) ||
-        contact.phone?.includes(search)
-      );
+        contact.phone?.includes(search) ||
+        contact.company_name?.toLowerCase().includes(search) ||
+        contact.address_line1?.toLowerCase().includes(search) ||
+        contact.city?.toLowerCase().includes(search)
+      ) return true;
+      // Search service location names for commercial contacts
+      if (contact.contact_type === "commercial") {
+        const contactLocations = allLocations.filter((l) => l.contact_id === contact.id);
+        if (contactLocations.some((l) => l.name.toLowerCase().includes(search))) return true;
+      }
+      return false;
     });
 
     const archived = filtered.filter((c) => c.archived_at || c.isArchived);
@@ -267,256 +275,6 @@ export default function ContactsPage() {
     setDeletingContact(contact);
   };
 
-  // Selection handlers
-  const toggleSelectContact = (contactId: string) => {
-    setSelectedContactIds((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(contactId)) {
-        newSet.delete(contactId);
-      } else {
-        newSet.add(contactId);
-      }
-      return newSet;
-    });
-  };
-
-  const toggleSelectSection = (sectionContacts: ContactWithStatus[]) => {
-    const sectionIds = sectionContacts.map((c) => c.id);
-    const allSectionSelected = sectionIds.every((id) => selectedContactIds.has(id));
-
-    setSelectedContactIds((prev) => {
-      const newSet = new Set(prev);
-      if (allSectionSelected) {
-        sectionIds.forEach((id) => newSet.delete(id));
-      } else {
-        sectionIds.forEach((id) => newSet.add(id));
-      }
-      return newSet;
-    });
-  };
-
-  const getSectionCheckboxState = (sectionContacts: ContactWithStatus[]) => {
-    if (sectionContacts.length === 0) return { checked: false, indeterminate: false };
-    const sectionIds = sectionContacts.map((c) => c.id);
-    const selectedCount = sectionIds.filter((id) => selectedContactIds.has(id)).length;
-
-    return {
-      checked: selectedCount === sectionIds.length,
-      indeterminate: selectedCount > 0 && selectedCount < sectionIds.length,
-    };
-  };
-
-  const handleBulkDeleteComplete = () => {
-    setSelectedContactIds(new Set());
-    queryClient.invalidateQueries({ queryKey: ["contacts"] });
-  };
-
-  const selectedContacts = useMemo(() => {
-    return contactsWithStatus.filter((c) => selectedContactIds.has(c.id));
-  }, [contactsWithStatus, selectedContactIds]);
-
-  const allSelectedAreArchived = useMemo(() => {
-    if (selectedContacts.length === 0) return false;
-    return selectedContacts.every((c) => c.isArchived || c.archived_at);
-  }, [selectedContacts]);
-
-  const [scrollStates, setScrollStates] = useState<
-    Record<string, { canScrollUp: boolean; canScrollDown: boolean }>
-  >({});
-
-  const handleScroll = (sectionKey: string, e: React.UIEvent<HTMLDivElement>) => {
-    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-    setScrollStates((prev) => ({
-      ...prev,
-      [sectionKey]: {
-        canScrollUp: scrollTop > 0,
-        canScrollDown: scrollTop + clientHeight < scrollHeight - 5,
-      },
-    }));
-  };
-
-  const renderContactSection = (
-    sectionTitle: string,
-    subtitle: string,
-    sectionContacts: ContactWithStatus[],
-    sectionColor: "green" | "blue" | "amber" | "gray" | "purple",
-    sectionKey: string,
-    emptyMessage: string
-  ) => {
-    const isMaintenance = sectionColor === "green";
-    const isLead = sectionColor === "amber";
-    const isArchived = sectionColor === "gray";
-    const isCommercialSection = sectionColor === "purple";
-    const isCollapsed = collapsedSections[sectionKey];
-    const isEmpty = sectionContacts.length === 0;
-    const { checked, indeterminate } = getSectionCheckboxState(sectionContacts);
-    const scrollState = scrollStates[sectionKey] || {
-      canScrollUp: false,
-      canScrollDown: false,
-    };
-
-    const colorClasses: Record<string, string> = {
-      green: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-      blue: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-      amber: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-      gray: "bg-gray-100 text-gray-700 dark:bg-gray-800/40 dark:text-gray-400",
-      purple: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-    };
-
-    const borderClasses: Record<string, string> = {
-      green: "border-green-200 dark:border-green-800/40",
-      blue: "border-blue-200 dark:border-blue-800/40",
-      amber: "border-amber-200 dark:border-amber-800/40",
-      gray: "border-gray-200 dark:border-gray-700",
-      purple: "border-purple-200 dark:border-purple-800/40",
-    };
-
-    const bgClasses: Record<string, string> = {
-      green: "bg-green-50/50 dark:bg-green-950/20",
-      blue: "bg-blue-50/50 dark:bg-blue-950/20",
-      amber: "bg-amber-50/50 dark:bg-amber-950/20",
-      gray: "bg-gray-50/50 dark:bg-gray-900/30",
-      purple: "bg-purple-50/50 dark:bg-purple-950/20",
-    };
-
-    return (
-      <div
-        key={sectionKey}
-        className={`rounded-xl border ${borderClasses[sectionColor]} overflow-hidden`}
-      >
-        {/* Collapsible Header */}
-        <div
-          className={`w-full flex items-center gap-3 px-4 py-3 ${bgClasses[sectionColor]} transition-all min-w-0`}
-        >
-          <button
-            onClick={() => toggleSection(sectionKey)}
-            className="flex items-start gap-3 flex-1 min-w-0 hover:opacity-90"
-          >
-            <ChevronRight
-              className={`w-5 h-5 text-muted-foreground transition-transform duration-200 mt-0.5 flex-shrink-0 ${
-                isCollapsed ? "" : "rotate-90"
-              }`}
-            />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-xl font-bold text-foreground truncate">
-                  {sectionTitle}
-                </h2>
-                <span
-                  className={`px-3 py-1 rounded-full text-sm font-medium flex-shrink-0 ${colorClasses[sectionColor]}`}
-                >
-                  {sectionContacts.length}
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1 hidden sm:block truncate">
-                {subtitle}
-              </p>
-            </div>
-          </button>
-
-          {/* Section Select All */}
-          {!isEmpty && (
-            <div
-              className="flex items-center gap-2 flex-shrink-0"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Checkbox
-                checked={checked}
-                ref={(el) => {
-                  if (el) {
-                    (el as unknown as HTMLInputElement).indeterminate = indeterminate;
-                  }
-                }}
-                onCheckedChange={() => toggleSelectSection(sectionContacts)}
-                className="flex-shrink-0"
-              />
-              <span className="text-sm text-muted-foreground whitespace-nowrap hidden sm:inline">
-                Select all ({sectionContacts.length})
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Collapsible Content */}
-        <div
-          className={`transition-all duration-200 ease-in-out overflow-hidden ${
-            isCollapsed ? "max-h-0" : "max-h-[5000px]"
-          }`}
-        >
-          <div className="p-4 bg-card">
-            {isEmpty ? (
-              <div className="text-center py-8 text-muted-foreground italic">{emptyMessage}</div>
-            ) : viewMode === "grid" ? (
-              <div className="relative">
-                {scrollState.canScrollUp && (
-                  <div className="absolute top-0 left-0 right-0 h-4 bg-gradient-to-b from-background to-transparent pointer-events-none z-10" />
-                )}
-                <div
-                  className="overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent"
-                  style={{ maxHeight: "calc(6 * 220px)" }}
-                  onScroll={(e) => handleScroll(sectionKey, e)}
-                >
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 min-w-0">
-                    {sectionContacts.map((contact) => (
-                      <ContactCard
-                        key={contact.id}
-                        contact={contact}
-                        onEdit={handleEdit}
-                        onDelete={handleDelete}
-                        isMaintenance={isMaintenance}
-                        isLead={isLead}
-                        isArchived={isArchived}
-                        isCommercial={isCommercialSection || contact.isCommercial}
-                        locationCount={contact.isCommercial ? allLocations.filter((l) => l.contact_id === contact.id).length : undefined}
-                        isSelected={selectedContactIds.has(contact.id)}
-                        onToggleSelect={() => toggleSelectContact(contact.id)}
-                      />
-                    ))}
-                  </div>
-                </div>
-                {scrollState.canScrollDown && (
-                  <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-background to-transparent pointer-events-none" />
-                )}
-              </div>
-            ) : (
-              <div className="relative">
-                {scrollState.canScrollUp && (
-                  <div className="absolute top-0 left-0 right-0 h-4 bg-gradient-to-b from-background to-transparent pointer-events-none z-10" />
-                )}
-                <div
-                  className="overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent rounded-lg border border-border shadow-sm"
-                  style={{ maxHeight: "calc(6 * 80px)" }}
-                  onScroll={(e) => handleScroll(sectionKey, e)}
-                >
-                  <div className="bg-card">
-                    {sectionContacts.map((contact, index) => (
-                      <ContactListItem
-                        key={contact.id}
-                        contact={contact}
-                        onEdit={handleEdit}
-                        onDelete={handleDelete}
-                        isLast={index === sectionContacts.length - 1}
-                        isMaintenance={isMaintenance}
-                        isLead={isLead}
-                        isArchived={isArchived}
-                        isCommercial={isCommercialSection || contact.isCommercial}
-                        locationCount={contact.isCommercial ? allLocations.filter((l) => l.contact_id === contact.id).length : undefined}
-                        isSelected={selectedContactIds.has(contact.id)}
-                        onToggleSelect={() => toggleSelectContact(contact.id)}
-                      />
-                    ))}
-                  </div>
-                </div>
-                {scrollState.canScrollDown && (
-                  <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-background to-transparent pointer-events-none" />
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   if (isLoadingCompany) {
     return (
@@ -590,64 +348,13 @@ export default function ContactsPage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input
-              placeholder="Search by name, email, or phone..."
+              placeholder="Search by name, email, phone, or address..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10 py-6 text-lg border-border focus:border-green-500"
             />
           </div>
 
-          {/* Bulk Action Bar */}
-          {selectedContactIds.size > 0 && (
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-card border border-border rounded-lg p-3 shadow-sm gap-3 min-w-0">
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="text-sm font-medium text-foreground truncate">
-                  {selectedContactIds.size} selected
-                </span>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 min-w-0">
-                {allSelectedAreArchived ? (
-                  <>
-                    <span className="text-xs text-muted-foreground italic hidden md:inline">
-                      Restore or permanently delete archived contacts.
-                    </span>
-                    <Button
-                      size="sm"
-                      onClick={() => setShowRestore(true)}
-                      className="bg-green-600 hover:bg-green-700 whitespace-nowrap"
-                    >
-                      <RotateCcw className="w-4 h-4 mr-2" />
-                      Restore
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => setShowPermanentDelete(true)}
-                      className="bg-red-600 hover:bg-red-700 whitespace-nowrap"
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      <span className="hidden sm:inline">Permanently Delete</span>
-                      <span className="sm:hidden">Delete</span>
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-xs text-muted-foreground italic hidden md:inline">
-                      Archiving hides contacts but keeps history.
-                    </span>
-                    <Button
-                      size="sm"
-                      onClick={() => setShowBulkDelete(true)}
-                      className="bg-gray-600 hover:bg-gray-700 whitespace-nowrap"
-                    >
-                      <Archive className="w-4 h-4 mr-2" />
-                      Archive Selected
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
         </div>
 
         {isLoadingContacts ? (
@@ -690,46 +397,81 @@ export default function ContactsPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            {renderContactSection(
-              "Commercial Accounts",
-              "Commercial contacts with multiple locations.",
-              commercialContacts,
-              "purple",
-              "commercial",
-              "No commercial accounts yet."
-            )}
-            {renderContactSection(
-              "Maintenance Accounts",
-              "Contacts with active maintenance plans.",
-              maintenanceContacts,
-              "green",
-              "maintenance",
-              "No maintenance accounts yet."
-            )}
-            {renderContactSection(
-              "Project Accounts",
-              "Contacts with active projects or bids.",
-              projectContacts,
-              "blue",
-              "project",
-              "No project accounts yet."
-            )}
-            {renderContactSection(
-              "Lead Accounts",
-              "Contacts with no projects or maintenance plans.",
-              leadContacts,
-              "amber",
-              "lead",
-              "No leads yet."
-            )}
-            {renderContactSection(
-              "Archived Accounts",
-              "Contacts that have been archived.",
-              archivedContacts,
-              "gray",
-              "archived",
-              "No archived accounts."
-            )}
+            <ContactSection
+              title="Commercial Accounts"
+              subtitle="Commercial contacts with multiple locations."
+              contacts={commercialContacts}
+              sectionColor="purple"
+              sectionKey="commercial"
+              emptyMessage="No commercial accounts yet."
+              viewMode={viewMode}
+              isCollapsed={!!collapsedSections["commercial"]}
+              onToggleCollapse={() => toggleSection("commercial")}
+
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              allLocations={allLocations}
+            />
+            <ContactSection
+              title="Maintenance Accounts"
+              subtitle="Contacts with active maintenance plans."
+              contacts={maintenanceContacts}
+              sectionColor="green"
+              sectionKey="maintenance"
+              emptyMessage="No maintenance accounts yet."
+              viewMode={viewMode}
+              isCollapsed={!!collapsedSections["maintenance"]}
+              onToggleCollapse={() => toggleSection("maintenance")}
+
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              allLocations={allLocations}
+            />
+            <ContactSection
+              title="Project Accounts"
+              subtitle="Contacts with active projects or bids."
+              contacts={projectContacts}
+              sectionColor="blue"
+              sectionKey="project"
+              emptyMessage="No project accounts yet."
+              viewMode={viewMode}
+              isCollapsed={!!collapsedSections["project"]}
+              onToggleCollapse={() => toggleSection("project")}
+
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              allLocations={allLocations}
+            />
+            <ContactSection
+              title="Lead Accounts"
+              subtitle="Contacts with no projects or maintenance plans."
+              contacts={leadContacts}
+              sectionColor="amber"
+              sectionKey="lead"
+              emptyMessage="No leads yet."
+              viewMode={viewMode}
+              isCollapsed={!!collapsedSections["lead"]}
+              onToggleCollapse={() => toggleSection("lead")}
+
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              allLocations={allLocations}
+            />
+            <ContactSection
+              title="Archived Accounts"
+              subtitle="Contacts that have been archived."
+              contacts={archivedContacts}
+              sectionColor="gray"
+              sectionKey="archived"
+              emptyMessage="No archived accounts."
+              viewMode={viewMode}
+              isCollapsed={!!collapsedSections["archived"]}
+              onToggleCollapse={() => toggleSection("archived")}
+
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              allLocations={allLocations}
+            />
           </div>
         )}
 
@@ -756,26 +498,6 @@ export default function ContactsPage() {
           contact={deletingContact}
         />
 
-        <BulkDeleteDialog
-          open={showBulkDelete}
-          onOpenChange={setShowBulkDelete}
-          selectedContacts={selectedContacts}
-          onComplete={handleBulkDeleteComplete}
-        />
-
-        <RestoreContactsDialog
-          open={showRestore}
-          onOpenChange={setShowRestore}
-          selectedContacts={selectedContacts}
-          onComplete={handleBulkDeleteComplete}
-        />
-
-        <PermanentDeleteDialog
-          open={showPermanentDelete}
-          onOpenChange={setShowPermanentDelete}
-          selectedContacts={selectedContacts}
-          onComplete={handleBulkDeleteComplete}
-        />
       </div>
     </div>
   );

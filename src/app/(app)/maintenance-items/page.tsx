@@ -3,18 +3,26 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/data/api";
+import { MaintenanceItem } from "@/data/types";
 import { useCompany } from "@/providers/company-provider";
-
+import { queryKeys } from "@/lib/query-keys";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -28,181 +36,236 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  Loader2,
-  Pencil,
-  Plus,
-  Search,
-  Trash2,
-  Wrench,
-} from "lucide-react";
+import { Loader2, Pencil, Plus, Search, Trash2, Wrench } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
-/* Category badge colors                                               */
+/* Helpers                                                             */
 /* ------------------------------------------------------------------ */
 
-const CATEGORY_COLORS: Record<string, string> = {
-  "Lawn Care": "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800/40",
-  Pruning: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800/40",
-  Seasonal: "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800/40",
-  "Beds & Gardens": "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800/40",
+type PricingType = MaintenanceItem["pricing_type"];
+
+const PRICING_TYPE_CONFIG: Record<
+  PricingType,
+  { label: string; badgeClass: string }
+> = {
+  per_unit: {
+    label: "Per Unit",
+    badgeClass:
+      "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-800/40",
+  },
+  flat_rate: {
+    label: "Flat Rate",
+    badgeClass:
+      "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/20 dark:text-green-400 dark:border-green-800/40",
+  },
+  variable: {
+    label: "Variable",
+    badgeClass:
+      "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-800/40",
+  },
+};
+
+function pricingDisplay(item: MaintenanceItem): string {
+  switch (item.pricing_type) {
+    case "per_unit":
+      return item.price_per_unit
+        ? `$${item.price_per_unit.toFixed(2)} / ${item.unit_label || "unit"}`
+        : "\u2014";
+    case "flat_rate":
+      return item.price_per_visit
+        ? `$${item.price_per_visit.toFixed(2)}`
+        : "\u2014";
+    case "variable": {
+      if (item.suggested_min && item.suggested_max) {
+        return `$${item.suggested_min}\u2013$${item.suggested_max}`;
+      }
+      return "Set per client";
+    }
+    default:
+      return "\u2014";
+  }
+}
+
+function durationDisplay(item: MaintenanceItem): string | null {
+  if (
+    item.pricing_type === "per_unit" &&
+    item.avg_minutes_per_unit
+  ) {
+    return `${item.avg_minutes_per_unit} min/${item.unit_label || "unit"}`;
+  }
+  return null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Form state type                                                     */
+/* ------------------------------------------------------------------ */
+
+interface FormData {
+  name: string;
+  description: string;
+  pricing_type: PricingType;
+  unit_label: string;
+  price_per_unit: string;
+  avg_minutes_per_unit: string;
+  price_per_visit: string;
+  suggested_min: string;
+  suggested_max: string;
+}
+
+const EMPTY_FORM: FormData = {
+  name: "",
+  description: "",
+  pricing_type: "flat_rate",
+  unit_label: "",
+  price_per_unit: "",
+  avg_minutes_per_unit: "",
+  price_per_visit: "",
+  suggested_min: "",
+  suggested_max: "",
 };
 
 /* ------------------------------------------------------------------ */
-/* Page Component                                                      */
+/* Page                                                                */
 /* ------------------------------------------------------------------ */
 
 export default function MaintenanceItemsPage() {
   const { currentCompanyId } = useCompany();
   const queryClient = useQueryClient();
 
-  // State
   const [searchQuery, setSearchQuery] = useState("");
   const [showDialog, setShowDialog] = useState(false);
-  const [editingItem, setEditingItem] = useState<{
-    id?: string;
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formData, setFormData] = useState<FormData>(EMPTY_FORM);
+  const [deletingItem, setDeletingItem] = useState<{
+    id: string;
     name: string;
-    description: string;
-    default_price: string;
-    category: string;
-    unit: string;
   } | null>(null);
-  const [deletingItem, setDeletingItem] = useState<{ id: string; name: string } | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  // Data fetching
+  // Data
   const { data: items = [], isLoading } = useQuery({
-    queryKey: ["maintenance-items", currentCompanyId],
+    queryKey: queryKeys.maintenanceItems(currentCompanyId),
     queryFn: () =>
       db.MaintenanceItem.filter({ company_id: currentCompanyId }),
   });
 
   // Mutations
-  const createMutation = useMutation({
-    mutationFn: (data: {
-      name: string;
-      description?: string;
-      default_price?: number;
-      category?: string;
-      unit?: string;
-    }) =>
-      db.MaintenanceItem.create({
+  const saveMutation = useMutation({
+    mutationFn: async (data: Partial<MaintenanceItem>) => {
+      if (editingId) {
+        return db.MaintenanceItem.update(editingId, data);
+      }
+      return db.MaintenanceItem.create({
         ...data,
         company_id: currentCompanyId,
-      }),
+      });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["maintenance-items"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.maintenanceItems(currentCompanyId) });
       setShowDialog(false);
-      setEditingItem(null);
     },
   });
 
-  const updateMutation = useMutation({
-    mutationFn: ({
-      id,
-      data,
-    }: {
-      id: string;
-      data: {
-        name: string;
-        description?: string;
-        default_price?: number;
-        category?: string;
-        unit?: string;
-      };
-    }) => db.MaintenanceItem.update(id, data),
+  const toggleMutation = useMutation({
+    mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
+      db.MaintenanceItem.update(id, { is_active }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["maintenance-items"] });
-      setShowDialog(false);
-      setEditingItem(null);
+      queryClient.invalidateQueries({ queryKey: queryKeys.maintenanceItems(currentCompanyId) });
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => db.MaintenanceItem.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["maintenance-items"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.maintenanceItems(currentCompanyId) });
       setShowDeleteDialog(false);
       setDeletingItem(null);
     },
   });
 
-  // Filter
+  // Filter + sort: active first, then alphabetical
   const filteredItems = useMemo(() => {
-    if (!searchQuery) return items;
-    const q = searchQuery.toLowerCase();
-    return items.filter(
-      (item) =>
-        item.name.toLowerCase().includes(q) ||
-        (item.category || "").toLowerCase().includes(q) ||
-        (item.description || "").toLowerCase().includes(q)
-    );
+    let result = [...items];
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        (item) =>
+          item.name.toLowerCase().includes(q) ||
+          (item.description || "").toLowerCase().includes(q)
+      );
+    }
+    return result.sort((a, b) => {
+      if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
   }, [items, searchQuery]);
 
-  // Group by category
-  const categories = useMemo(() => {
-    const cats = new Map<string, typeof items>();
-    for (const item of filteredItems) {
-      const cat = item.category || "Uncategorized";
-      if (!cats.has(cat)) cats.set(cat, []);
-      cats.get(cat)!.push(item);
-    }
-    return cats;
-  }, [filteredItems]);
+  const activeCount = items.filter((i) => i.is_active).length;
 
   // Handlers
   const handleCreate = () => {
-    setEditingItem({
-      name: "",
-      description: "",
-      default_price: "",
-      category: "",
-      unit: "per visit",
-    });
+    setEditingId(null);
+    setFormData(EMPTY_FORM);
     setShowDialog(true);
   };
 
-  const handleEdit = (item: (typeof items)[0]) => {
-    setEditingItem({
-      id: item.id,
+  const handleEdit = (item: MaintenanceItem) => {
+    setEditingId(item.id);
+    setFormData({
       name: item.name,
       description: item.description || "",
-      default_price: item.default_price?.toString() || "",
-      category: item.category || "",
-      unit: item.unit || "per visit",
+      pricing_type: item.pricing_type,
+      unit_label: item.unit_label || "",
+      price_per_unit: item.price_per_unit?.toString() || "",
+      avg_minutes_per_unit: item.avg_minutes_per_unit?.toString() || "",
+      price_per_visit: item.price_per_visit?.toString() || "",
+      suggested_min: item.suggested_min?.toString() || "",
+      suggested_max: item.suggested_max?.toString() || "",
     });
     setShowDialog(true);
-  };
-
-  const handleDelete = (item: (typeof items)[0]) => {
-    setDeletingItem({ id: item.id, name: item.name });
-    setShowDeleteDialog(true);
   };
 
   const handleSave = () => {
-    if (!editingItem || !editingItem.name.trim()) return;
+    if (!formData.name.trim()) return;
 
-    const data = {
-      name: editingItem.name.trim(),
-      description: editingItem.description.trim() || undefined,
-      default_price: editingItem.default_price
-        ? parseFloat(editingItem.default_price)
-        : undefined,
-      category: editingItem.category.trim() || undefined,
-      unit: editingItem.unit.trim() || undefined,
+    const data: Partial<MaintenanceItem> = {
+      name: formData.name.trim(),
+      description: formData.description.trim() || undefined,
+      pricing_type: formData.pricing_type,
+      is_active: true,
+      // Clear fields not relevant to selected pricing type
+      unit_label: undefined,
+      price_per_unit: undefined,
+      avg_minutes_per_unit: undefined,
+      price_per_visit: undefined,
+      suggested_min: undefined,
+      suggested_max: undefined,
     };
 
-    if (editingItem.id) {
-      updateMutation.mutate({ id: editingItem.id, data });
-    } else {
-      createMutation.mutate(data);
+    switch (formData.pricing_type) {
+      case "per_unit":
+        data.unit_label = formData.unit_label.trim() || undefined;
+        data.price_per_unit = parseFloat(formData.price_per_unit) || undefined;
+        data.avg_minutes_per_unit =
+          parseFloat(formData.avg_minutes_per_unit) || undefined;
+        break;
+      case "flat_rate":
+        data.price_per_visit =
+          parseFloat(formData.price_per_visit) || undefined;
+        break;
+      case "variable":
+        data.suggested_min = parseFloat(formData.suggested_min) || undefined;
+        data.suggested_max = parseFloat(formData.suggested_max) || undefined;
+        break;
     }
+
+    // Preserve is_active on edit
+    if (editingId) {
+      const existing = items.find((i) => i.id === editingId);
+      if (existing) data.is_active = existing.is_active;
+    }
+
+    saveMutation.mutate(data);
   };
 
   return (
@@ -232,15 +295,15 @@ export default function MaintenanceItemsPage() {
           </Button>
         </div>
 
-        {/* Main Table */}
+        {/* Table */}
         <Card className="shadow-lg">
           <CardHeader className="border-b border-border bg-gradient-to-r from-card-header-from to-card-header-to">
             <div className="flex items-center justify-between gap-4">
               <CardTitle>
-                Service Items ({items.length})
+                Service Items ({activeCount} active, {items.length} total)
               </CardTitle>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   placeholder="Search items..."
                   value={searchQuery}
@@ -258,252 +321,399 @@ export default function MaintenanceItemsPage() {
             ) : filteredItems.length === 0 ? (
               <div className="p-12 text-center">
                 <Wrench className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-muted-foreground mb-4">No maintenance items yet</p>
-                <Button
-                  onClick={handleCreate}
-                  className="bg-gradient-to-r from-green-500 to-emerald-600"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create First Item
-                </Button>
+                <p className="text-muted-foreground mb-4">
+                  {items.length === 0
+                    ? "No maintenance items yet"
+                    : "No items match your search"}
+                </p>
+                {items.length === 0 && (
+                  <Button
+                    onClick={handleCreate}
+                    className="bg-gradient-to-r from-green-500 to-emerald-600"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create First Item
+                  </Button>
+                )}
               </div>
             ) : (
-              <table className="w-full">
-                <thead className="bg-muted">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                      Name
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase hidden md:table-cell">
-                      Description
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                      Category
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase">
-                      Default Price
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase hidden sm:table-cell">
-                      Unit
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredItems
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map((item) => {
-                      const catColor =
-                        CATEGORY_COLORS[item.category || ""] ||
-                        "bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800/40 dark:text-gray-400 dark:border-gray-700/40";
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-muted">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                        Service
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                        Pricing Type
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase">
+                        Price
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase hidden md:table-cell">
+                        Duration
+                      </th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase">
+                        Active
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filteredItems.map((item) => {
+                      const ptConfig = PRICING_TYPE_CONFIG[item.pricing_type];
+                      const duration = durationDisplay(item);
+
                       return (
                         <tr
                           key={item.id}
-                          className="hover:bg-accent transition-colors"
+                          className={`hover:bg-accent/30 transition-colors ${
+                            !item.is_active ? "opacity-50" : ""
+                          }`}
                         >
                           <td className="px-6 py-4">
-                            <div className="font-medium text-foreground">
-                              {item.name}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 hidden md:table-cell">
-                            <div className="text-sm text-muted-foreground truncate max-w-[300px]">
-                              {item.description || "\u2014"}
+                            <div>
+                              <p className="font-medium text-foreground">
+                                {item.name}
+                              </p>
+                              {item.description && (
+                                <p className="text-xs text-muted-foreground truncate max-w-[300px] mt-0.5">
+                                  {item.description}
+                                </p>
+                              )}
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            {item.category ? (
-                              <Badge variant="outline" className={catColor}>
-                                {item.category}
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground text-sm">
-                                \u2014
-                              </span>
-                            )}
+                            <Badge
+                              variant="outline"
+                              className={ptConfig.badgeClass}
+                            >
+                              {ptConfig.label}
+                            </Badge>
                           </td>
                           <td className="px-6 py-4 text-right">
-                            {item.default_price ? (
-                              <span className="font-medium text-foreground">
-                                ${item.default_price.toFixed(2)}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground text-sm">
-                                \u2014
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 hidden sm:table-cell">
-                            <span className="text-sm text-muted-foreground">
-                              {item.unit || "per visit"}
+                            <span className="font-medium text-foreground font-mono">
+                              {pricingDisplay(item)}
                             </span>
+                          </td>
+                          <td className="px-6 py-4 hidden md:table-cell">
+                            <span className="text-sm text-muted-foreground">
+                              {duration || "\u2014"}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <Switch
+                              checked={item.is_active}
+                              onCheckedChange={(checked) =>
+                                toggleMutation.mutate({
+                                  id: item.id,
+                                  is_active: checked,
+                                })
+                              }
+                            />
                           </td>
                           <td className="px-6 py-4 text-right">
                             <div className="flex items-center justify-end gap-1">
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8"
-                                      onClick={() => handleEdit(item)}
-                                    >
-                                      <Pencil className="w-4 h-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Edit</TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
-                                      onClick={() => handleDelete(item)}
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Delete</TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleEdit(item)}
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
+                                onClick={() => {
+                                  setDeletingItem({
+                                    id: item.id,
+                                    name: item.name,
+                                  });
+                                  setShowDeleteDialog(true);
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
                             </div>
                           </td>
                         </tr>
                       );
                     })}
-                </tbody>
-              </table>
+                  </tbody>
+                </table>
+              </div>
             )}
           </CardContent>
         </Card>
+      </div>
 
-        {/* Add/Edit Dialog */}
-        <Dialog open={showDialog} onOpenChange={setShowDialog}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>
-                {editingItem?.id ? "Edit Item" : "New Maintenance Item"}
-              </DialogTitle>
-              <DialogDescription>
-                {editingItem?.id
-                  ? "Update the maintenance service item details."
-                  : "Create a reusable service item for maintenance plans."}
-              </DialogDescription>
-            </DialogHeader>
-            {editingItem && (
-              <div className="space-y-4 py-2">
-                <div className="space-y-2">
-                  <Label htmlFor="item-name">Name *</Label>
+      {/* ============ Create / Edit Dialog ============ */}
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">
+              {editingId ? "Edit Item" : "New Maintenance Item"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-5 mt-2">
+            {/* Name */}
+            <div className="space-y-2">
+              <Label htmlFor="mi-name">Service Name *</Label>
+              <Input
+                id="mi-name"
+                value={formData.name}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
+                placeholder="e.g. Lawn Mowing"
+              />
+            </div>
+
+            {/* Description */}
+            <div className="space-y-2">
+              <Label htmlFor="mi-desc">Description</Label>
+              <Textarea
+                id="mi-desc"
+                value={formData.description}
+                onChange={(e) =>
+                  setFormData({ ...formData, description: e.target.value })
+                }
+                placeholder="Brief description of the service"
+                rows={2}
+              />
+            </div>
+
+            {/* Pricing Type */}
+            <div className="space-y-2">
+              <Label>Pricing Type *</Label>
+              <Select
+                value={formData.pricing_type}
+                onValueChange={(val) =>
+                  setFormData({
+                    ...formData,
+                    pricing_type: val as PricingType,
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="flat_rate">
+                    Flat Rate &mdash; fixed price per visit
+                  </SelectItem>
+                  <SelectItem value="per_unit">
+                    Per Unit &mdash; price per sqft, window, etc.
+                  </SelectItem>
+                  <SelectItem value="variable">
+                    Variable &mdash; set per client
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* ---- Conditional fields ---- */}
+
+            {formData.pricing_type === "flat_rate" && (
+              <div className="space-y-2">
+                <Label htmlFor="mi-ppv">Price Per Visit *</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                    $
+                  </span>
                   <Input
-                    id="item-name"
-                    value={editingItem.name}
+                    id="mi-ppv"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.price_per_visit}
                     onChange={(e) =>
-                      setEditingItem({ ...editingItem, name: e.target.value })
-                    }
-                    placeholder="e.g. Lawn Mowing"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="item-desc">Description</Label>
-                  <Input
-                    id="item-desc"
-                    value={editingItem.description}
-                    onChange={(e) =>
-                      setEditingItem({
-                        ...editingItem,
-                        description: e.target.value,
+                      setFormData({
+                        ...formData,
+                        price_per_visit: e.target.value,
                       })
                     }
-                    placeholder="Brief description of the service"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="item-price">Default Price ($)</Label>
-                    <Input
-                      id="item-price"
-                      type="number"
-                      value={editingItem.default_price}
-                      onChange={(e) =>
-                        setEditingItem({
-                          ...editingItem,
-                          default_price: e.target.value,
-                        })
-                      }
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="item-unit">Unit</Label>
-                    <Input
-                      id="item-unit"
-                      value={editingItem.unit}
-                      onChange={(e) =>
-                        setEditingItem({ ...editingItem, unit: e.target.value })
-                      }
-                      placeholder="per visit"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="item-cat">Category</Label>
-                  <Input
-                    id="item-cat"
-                    value={editingItem.category}
-                    onChange={(e) =>
-                      setEditingItem({
-                        ...editingItem,
-                        category: e.target.value,
-                      })
-                    }
-                    placeholder="e.g. Lawn Care, Seasonal"
+                    className="pl-7"
+                    placeholder="0.00"
                   />
                 </div>
               </div>
             )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowDialog(false)}>
+
+            {formData.pricing_type === "per_unit" && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="mi-unit">Unit Label *</Label>
+                    <Input
+                      id="mi-unit"
+                      value={formData.unit_label}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          unit_label: e.target.value,
+                        })
+                      }
+                      placeholder="e.g. sqft, window, yard"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="mi-ppu">Price Per Unit *</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                        $
+                      </span>
+                      <Input
+                        id="mi-ppu"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formData.price_per_unit}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            price_per_unit: e.target.value,
+                          })
+                        }
+                        className="pl-7"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="mi-mins">
+                    Avg. Minutes Per Unit
+                  </Label>
+                  <Input
+                    id="mi-mins"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={formData.avg_minutes_per_unit}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        avg_minutes_per_unit: e.target.value,
+                      })
+                    }
+                    placeholder="e.g. 5"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Used for scheduling — estimates visit duration based on
+                    quantity
+                  </p>
+                </div>
+              </>
+            )}
+
+            {formData.pricing_type === "variable" && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="mi-min">Suggested Min</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                      $
+                    </span>
+                    <Input
+                      id="mi-min"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.suggested_min}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          suggested_min: e.target.value,
+                        })
+                      }
+                      className="pl-7"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="mi-max">Suggested Max</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                      $
+                    </span>
+                    <Input
+                      id="mi-max"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.suggested_max}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          suggested_max: e.target.value,
+                        })
+                      }
+                      className="pl-7"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                <p className="col-span-2 text-xs text-muted-foreground -mt-2">
+                  Price is set per client inside each maintenance plan
+                </p>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => setShowDialog(false)}
+              >
                 Cancel
               </Button>
               <Button
                 onClick={handleSave}
-                disabled={!editingItem?.name.trim()}
+                disabled={!formData.name.trim() || saveMutation.isPending}
                 className="bg-gradient-to-r from-green-500 to-emerald-600"
               >
-                {editingItem?.id ? "Save Changes" : "Create Item"}
+                {saveMutation.isPending
+                  ? "Saving..."
+                  : editingId
+                    ? "Save Changes"
+                    : "Create Item"}
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-        {/* Delete Confirmation */}
-        <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete Maintenance Item</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to permanently delete &quot;{deletingItem?.name}&quot;?
-                This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => deletingItem && deleteMutation.mutate(deletingItem.id)}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
+      {/* ============ Delete Confirmation ============ */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Maintenance Item</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &quot;{deletingItem?.name}&quot;?
+              This won&apos;t affect existing maintenance plans that already use
+              this item.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() =>
+                deletingItem && deleteMutation.mutate(deletingItem.id)
+              }
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

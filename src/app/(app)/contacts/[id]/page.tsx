@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, use, useMemo } from "react";
+import React, { useState, useEffect, use, useMemo } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { db } from "@/data/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "@/providers/company-provider";
@@ -15,7 +15,7 @@ import {
   ArrowLeft, Mail, Phone, MapPin, Loader2,
   LayoutGrid, User, MoreVertical, Pencil, Archive,
   Map, Copy, Wrench, Plus, Eye, DollarSign,
-  ClipboardList, FileText, Image, Building2, Trash2,
+  ClipboardList, FileText, Building2, Trash2,
   ChevronDown, ChevronRight,
 } from "lucide-react";
 import {
@@ -35,30 +35,9 @@ import EditContactDialog from "@/components/contacts/edit-contact-dialog";
 import DeleteContactDialog from "@/components/contacts/delete-contact-dialog";
 import CreateLocationDialog from "@/components/contacts/create-location-dialog";
 import EditLocationDialog from "@/components/contacts/edit-location-dialog";
+import EditMaintenancePlanDialog from "@/components/contacts/edit-maintenance-plan-dialog";
 import type { Contact, MaintenancePlan, MaintenanceVisit, Project, Payment, Location } from "@/data/types";
-
-function classifyContact(
-  contact: Contact,
-  maintenancePlans: MaintenancePlan[],
-  projects: Project[],
-): "commercial" | "maintenance" | "project" | "lead" {
-  if (contact.contact_type === "commercial") return "commercial";
-
-  const hasActiveMaintenance = maintenancePlans.some(
-    (p) =>
-      p.contact_id === contact.id &&
-      p.status === "active" &&
-      !p.deleted_at
-  );
-  if (hasActiveMaintenance) return "maintenance";
-
-  const hasActiveProjects = projects.some(
-    (p) => p.contact_id === contact.id && !p.archived
-  );
-  if (hasActiveProjects) return "project";
-
-  return "lead";
-}
+import { classifyContact } from "@/lib/contact-classification";
 
 export default function ContactDetailPage({
   params,
@@ -75,6 +54,8 @@ export default function ContactDetailPage({
   const [showCreateLocation, setShowCreateLocation] = useState(false);
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
   const [expandedLocationIds, setExpandedLocationIds] = useState<Record<string, boolean>>({});
+  const [editingPlan, setEditingPlan] = useState<MaintenancePlan | null>(null);
+  const searchParams = useSearchParams();
 
   const { data: allContacts = [], isLoading: contactsLoading } = useQuery({
     queryKey: ["contacts", currentCompanyId],
@@ -158,6 +139,28 @@ export default function ContactDetailPage({
   });
 
   const isCommercial = contact?.contact_type === "commercial";
+
+  // Auto-open edit plan dialog when navigated with ?editPlan= query param
+  const editPlanId = searchParams.get("editPlan");
+  const tabParam = searchParams.get("tab");
+
+  useEffect(() => {
+    if (tabParam === "maintenance") {
+      setActiveTab("maintenance");
+    }
+  }, [tabParam]);
+
+  useEffect(() => {
+    if (editPlanId && maintenancePlans.length > 0) {
+      const plan = maintenancePlans.find((p) => p.id === editPlanId);
+      if (plan) {
+        setActiveTab("maintenance");
+        setEditingPlan(plan);
+        // Clean URL so refresh doesn't reopen
+        router.replace(`/contacts/${contactId}`, { scroll: false });
+      }
+    }
+  }, [editPlanId, maintenancePlans, contactId, router]);
 
   // Group maintenance plans by location for commercial contacts
   const plansByLocation = useMemo(() => {
@@ -369,7 +372,7 @@ export default function ContactDetailPage({
     ? contact.company_name.substring(0, 2).toUpperCase()
     : `${contact.first_name?.[0]?.toUpperCase() || ""}${contact.last_name?.[0]?.toUpperCase() || ""}`;
 
-  const tabCount = isCommercial ? 7 : 6;
+  const tabCount = isCommercial ? 5 : 4;
 
   return (
     <div className="p-4 md:p-8">
@@ -631,7 +634,7 @@ export default function ContactDetailPage({
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className={`grid w-full ${isCommercial ? "grid-cols-7" : "grid-cols-6"} bg-card border shadow-sm`}>
+          <TabsList className={`grid w-full ${isCommercial ? "grid-cols-5" : "grid-cols-4"} bg-card border shadow-sm`}>
             <TabsTrigger
               value="overview"
               className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white"
@@ -640,11 +643,11 @@ export default function ContactDetailPage({
               <span className="hidden sm:inline">Overview</span>
             </TabsTrigger>
             <TabsTrigger
-              value="bids"
+              value="maintenance"
               className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white"
             >
-              <FileText className="w-4 h-4 mr-2" />
-              <span className="hidden sm:inline">Bids ({bids.length})</span>
+              <Wrench className="w-4 h-4 mr-2" />
+              <span className="hidden sm:inline">Maintenance</span>
             </TabsTrigger>
             <TabsTrigger
               value="projects"
@@ -652,6 +655,13 @@ export default function ContactDetailPage({
             >
               <ClipboardList className="w-4 h-4 mr-2" />
               <span className="hidden sm:inline">Projects ({projects.length})</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="payments"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white"
+            >
+              <DollarSign className="w-4 h-4 mr-2" />
+              <span className="hidden sm:inline">All Payments</span>
             </TabsTrigger>
             {isCommercial && (
               <TabsTrigger
@@ -662,27 +672,6 @@ export default function ContactDetailPage({
                 <span className="hidden sm:inline">Locations ({locations.length})</span>
               </TabsTrigger>
             )}
-            <TabsTrigger
-              value="maintenance"
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white"
-            >
-              <Wrench className="w-4 h-4 mr-2" />
-              <span className="hidden sm:inline">Maintenance</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="payments"
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white"
-            >
-              <DollarSign className="w-4 h-4 mr-2" />
-              <span className="hidden sm:inline">Payments</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="photos"
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white"
-            >
-              <Image className="w-4 h-4 mr-2" />
-              <span className="hidden sm:inline">Photos</span>
-            </TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -719,7 +708,7 @@ export default function ContactDetailPage({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => setActiveTab("bids")}
+                          onClick={() => setActiveTab("projects")}
                           className="w-full text-green-600"
                         >
                           View all {bids.length} bids
@@ -847,134 +836,365 @@ export default function ContactDetailPage({
             </div>
           </TabsContent>
 
-          {/* Bids Tab */}
-          <TabsContent value="bids">
-            <Card>
-              <CardHeader>
-                <CardTitle>Bids</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {bids.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                      <FileText className="w-8 h-8 text-muted-foreground" />
-                    </div>
-                    <p className="text-muted-foreground mb-4">No bids yet for this client.</p>
-                    <Button
-                      onClick={() =>
-                        router.push(`${routes.bids}?contactId=${contactId}`)
-                      }
-                      className="bg-gradient-to-r from-green-500 to-emerald-600"
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Create Bid
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="rounded-lg border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Title</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Total</TableHead>
-                          <TableHead>Created</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {bids.map((bid) => (
-                          <TableRow key={bid.id} className="cursor-pointer hover:bg-accent">
-                            <TableCell className="font-medium">
-                              {bid.title || "Untitled Bid"}
-                            </TableCell>
-                            <TableCell>
-                              <Badge
-                                className={
-                                  bid.status === "accepted"
-                                    ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                                    : bid.status === "sent"
-                                      ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
-                                      : bid.status === "declined"
-                                        ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
-                                        : "bg-gray-100 text-gray-800 dark:bg-gray-800/40 dark:text-gray-400"
-                                }
-                              >
-                                {bid.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>${bid.bid_total?.toFixed(2) || "0.00"}</TableCell>
-                            <TableCell>
-                              {new Date(bid.created_date).toLocaleDateString()}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Projects Tab */}
+          {/* Projects Tab (merged with Bids) */}
           <TabsContent value="projects">
-            <Card>
-              <CardHeader>
-                <CardTitle>Projects</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {projects.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                      <ClipboardList className="w-8 h-8 text-muted-foreground" />
+            <div className="space-y-6">
+              {/* Payment Summary (Project-specific) */}
+              {(() => {
+                const nonMaintenancePayments = payments.filter((p) => p.type !== "maintenance");
+                const acceptedProjects = projects.filter((p) => p.acceptance_state === "accepted");
+                const totalAcceptedAmount = acceptedProjects.reduce((s, p) => s + (p.total_amount || 0), 0);
+                const totalPaid = nonMaintenancePayments.filter((p) => p.status === "succeeded").reduce((s, p) => s + (p.amount || 0), 0);
+                const remaining = totalAcceptedAmount - totalPaid;
+
+                return (
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/40 p-4">
+                      <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Total Accepted</p>
+                      <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">
+                        ${totalAcceptedAmount.toFixed(2)}
+                      </p>
                     </div>
-                    <p className="text-muted-foreground">No projects yet for this client.</p>
+                    <div className="rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800/40 p-4">
+                      <p className="text-xs font-semibold text-green-600 uppercase tracking-wider">Total Paid</p>
+                      <p className="text-2xl font-bold text-green-700 dark:text-green-400">
+                        ${totalPaid.toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 p-4">
+                      <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider">Remaining Balance</p>
+                      <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">
+                        ${remaining.toFixed(2)}
+                      </p>
+                    </div>
                   </div>
-                ) : (
-                  <div className="rounded-lg border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Title</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Amount</TableHead>
-                          <TableHead>Created</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {projects.map((project) => (
-                          <TableRow
-                            key={project.id}
-                            className="cursor-pointer hover:bg-accent"
-                          >
-                            <TableCell className="font-medium">{project.title}</TableCell>
-                            <TableCell>
-                              <Badge
-                                className={
-                                  project.status === "completed"
-                                    ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                                    : project.status === "in_progress"
-                                      ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
-                                      : "bg-gray-100 text-gray-800 dark:bg-gray-800/40 dark:text-gray-400"
-                                }
-                              >
-                                {project.status || "draft"}
+                );
+              })()}
+
+              {/* Projects Section */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Projects</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {projects.length === 0 ? (
+                    <div className="text-center py-12">
+                      <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                        <ClipboardList className="w-8 h-8 text-muted-foreground" />
+                      </div>
+                      <p className="text-muted-foreground">No projects yet for this client.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {/* Accepted Projects */}
+                      {(() => {
+                        const accepted = projects.filter(
+                          (p) => p.acceptance_state === "accepted" && !p.is_completed && !p.archived_at
+                        );
+                        if (accepted.length === 0) return null;
+                        return (
+                          <div>
+                            <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                              <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                {accepted.length}
                               </Badge>
-                            </TableCell>
-                            <TableCell>
-                              ${project.total_amount?.toFixed(2) || "0.00"}
-                            </TableCell>
-                            <TableCell>
-                              {new Date(project.created_date).toLocaleDateString()}
-                            </TableCell>
+                              Accepted Projects
+                            </h4>
+                            <div className="rounded-lg border">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Title</TableHead>
+                                    {isCommercial && <TableHead>Location</TableHead>}
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Amount</TableHead>
+                                    <TableHead>Created</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {accepted.map((project) => {
+                                    const projLocation = project.location_id
+                                      ? locations.find((l) => l.id === project.location_id)
+                                      : null;
+                                    return (
+                                      <TableRow key={project.id} className="cursor-pointer hover:bg-accent">
+                                        <TableCell className="font-medium">{project.title}</TableCell>
+                                        {isCommercial && (
+                                          <TableCell className="text-muted-foreground text-sm">
+                                            {projLocation ? projLocation.name : "\u2014"}
+                                          </TableCell>
+                                        )}
+                                        <TableCell>
+                                          <Badge className={
+                                            project.status === "in_progress"
+                                              ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
+                                              : project.status === "scheduled"
+                                                ? "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400"
+                                                : "bg-gray-100 text-gray-800 dark:bg-gray-800/40 dark:text-gray-400"
+                                          }>
+                                            {project.status || "draft"}
+                                          </Badge>
+                                        </TableCell>
+                                        <TableCell>${project.total_amount?.toFixed(2) || "0.00"}</TableCell>
+                                        <TableCell>{new Date(project.created_date).toLocaleDateString()}</TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Waiting for Response */}
+                      {(() => {
+                        const waiting = projects.filter(
+                          (p) =>
+                            (!p.acceptance_state || p.acceptance_state === "pending") &&
+                            !p.is_completed &&
+                            !p.archived_at
+                        );
+                        // Also include projects linked to sent bids
+                        const sentBidProjectIds = new Set(
+                          bids.filter((b) => b.status === "sent" && b.project_id).map((b) => b.project_id)
+                        );
+                        const waitingWithSentBids = projects.filter(
+                          (p) =>
+                            sentBidProjectIds.has(p.id) &&
+                            p.acceptance_state !== "accepted" &&
+                            !p.is_completed &&
+                            !p.archived_at &&
+                            !waiting.some((w) => w.id === p.id)
+                        );
+                        const combined = [...waiting, ...waitingWithSentBids];
+                        if (combined.length === 0) return null;
+                        return (
+                          <div>
+                            <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                              <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                {combined.length}
+                              </Badge>
+                              Waiting for Response
+                            </h4>
+                            <div className="rounded-lg border">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Title</TableHead>
+                                    {isCommercial && <TableHead>Location</TableHead>}
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Amount</TableHead>
+                                    <TableHead>Created</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {combined.map((project) => {
+                                    const projLocation = project.location_id
+                                      ? locations.find((l) => l.id === project.location_id)
+                                      : null;
+                                    return (
+                                      <TableRow key={project.id} className="cursor-pointer hover:bg-accent">
+                                        <TableCell className="font-medium">{project.title}</TableCell>
+                                        {isCommercial && (
+                                          <TableCell className="text-muted-foreground text-sm">
+                                            {projLocation ? projLocation.name : "\u2014"}
+                                          </TableCell>
+                                        )}
+                                        <TableCell>
+                                          <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                                            {project.acceptance_state || "pending"}
+                                          </Badge>
+                                        </TableCell>
+                                        <TableCell>${project.total_amount?.toFixed(2) || "0.00"}</TableCell>
+                                        <TableCell>{new Date(project.created_date).toLocaleDateString()}</TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Completed Projects */}
+                      {(() => {
+                        const completed = projects.filter((p) => p.is_completed && !p.archived_at);
+                        if (completed.length === 0) return null;
+                        return (
+                          <div>
+                            <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                              <Badge className="bg-gray-100 text-gray-700 dark:bg-gray-800/40 dark:text-gray-400">
+                                {completed.length}
+                              </Badge>
+                              Completed Projects
+                            </h4>
+                            <div className="rounded-lg border">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Title</TableHead>
+                                    {isCommercial && <TableHead>Location</TableHead>}
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Amount</TableHead>
+                                    <TableHead>Created</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {completed.map((project) => {
+                                    const projLocation = project.location_id
+                                      ? locations.find((l) => l.id === project.location_id)
+                                      : null;
+                                    return (
+                                      <TableRow key={project.id} className="cursor-pointer hover:bg-accent">
+                                        <TableCell className="font-medium">{project.title}</TableCell>
+                                        {isCommercial && (
+                                          <TableCell className="text-muted-foreground text-sm">
+                                            {projLocation ? projLocation.name : "\u2014"}
+                                          </TableCell>
+                                        )}
+                                        <TableCell>
+                                          <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                                            completed
+                                          </Badge>
+                                        </TableCell>
+                                        <TableCell>${project.total_amount?.toFixed(2) || "0.00"}</TableCell>
+                                        <TableCell>{new Date(project.created_date).toLocaleDateString()}</TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Archived Projects */}
+                      {(() => {
+                        const archived = projects.filter((p) => !!p.archived_at);
+                        if (archived.length === 0) return null;
+                        return (
+                          <div>
+                            <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                              <Badge className="bg-gray-100 text-gray-500 dark:bg-gray-800/40 dark:text-gray-500">
+                                {archived.length}
+                              </Badge>
+                              Archived Projects
+                            </h4>
+                            <div className="rounded-lg border">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Title</TableHead>
+                                    {isCommercial && <TableHead>Location</TableHead>}
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Amount</TableHead>
+                                    <TableHead>Created</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {archived.map((project) => {
+                                    const projLocation = project.location_id
+                                      ? locations.find((l) => l.id === project.location_id)
+                                      : null;
+                                    return (
+                                      <TableRow key={project.id} className="cursor-pointer hover:bg-accent opacity-60">
+                                        <TableCell className="font-medium">{project.title}</TableCell>
+                                        {isCommercial && (
+                                          <TableCell className="text-muted-foreground text-sm">
+                                            {projLocation ? projLocation.name : "\u2014"}
+                                          </TableCell>
+                                        )}
+                                        <TableCell>
+                                          <Badge className="bg-gray-100 text-gray-500 dark:bg-gray-800/40 dark:text-gray-500">
+                                            archived
+                                          </Badge>
+                                        </TableCell>
+                                        <TableCell>${project.total_amount?.toFixed(2) || "0.00"}</TableCell>
+                                        <TableCell>{new Date(project.created_date).toLocaleDateString()}</TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Bids Section (moved from old Bids tab) */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Bids</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {bids.length === 0 ? (
+                    <div className="text-center py-8">
+                      <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                        <FileText className="w-8 h-8 text-muted-foreground" />
+                      </div>
+                      <p className="text-muted-foreground mb-4">No bids yet for this client.</p>
+                      <Button
+                        onClick={() =>
+                          router.push(`${routes.bids}?contactId=${contactId}`)
+                        }
+                        className="bg-gradient-to-r from-green-500 to-emerald-600"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create Bid
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Title</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Total</TableHead>
+                            <TableHead>Created</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                        </TableHeader>
+                        <TableBody>
+                          {bids.map((bid) => (
+                            <TableRow key={bid.id} className="cursor-pointer hover:bg-accent">
+                              <TableCell className="font-medium">
+                                {bid.title || "Untitled Bid"}
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  className={
+                                    bid.status === "accepted"
+                                      ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                                      : bid.status === "sent"
+                                        ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
+                                        : bid.status === "declined"
+                                          ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                                          : "bg-gray-100 text-gray-800 dark:bg-gray-800/40 dark:text-gray-400"
+                                  }
+                                >
+                                  {bid.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>${bid.bid_total?.toFixed(2) || "0.00"}</TableCell>
+                              <TableCell>
+                                {new Date(bid.created_date).toLocaleDateString()}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           {/* Locations Tab (Commercial only) */}
@@ -1034,6 +1254,11 @@ export default function ContactDetailPage({
                                   {loc.is_primary && (
                                     <Badge variant="outline" className="text-xs border-purple-300 text-purple-600">Primary</Badge>
                                   )}
+                                  {loc.billing_type && (
+                                    <Badge variant="outline" className="text-xs">
+                                      {loc.billing_type === "monthly_contract" ? "Monthly Contract" : "Per Visit"}
+                                    </Badge>
+                                  )}
                                   {activePlanCount > 0 ? (
                                     <Badge className="text-xs bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800/40">
                                       {activePlanCount} active plan{activePlanCount !== 1 ? "s" : ""}
@@ -1086,12 +1311,9 @@ export default function ContactDetailPage({
 
           {/* Maintenance Tab */}
           <TabsContent value="maintenance">
-            <Card>
-              <CardHeader>
-                <CardTitle>Maintenance Plans</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {maintenancePlans.length === 0 ? (
+            {maintenancePlans.length === 0 ? (
+              <Card>
+                <CardContent className="p-6">
                   <div className="text-center py-12">
                     <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
                       <Wrench className="w-8 h-8 text-muted-foreground" />
@@ -1103,111 +1325,284 @@ export default function ContactDetailPage({
                       Create a maintenance plan from the contacts list.
                     </p>
                   </div>
-                ) : isCommercial ? (
-                  /* Commercial: group plans by location */
-                  <div className="space-y-4">
-                    {locations.map((loc) => {
-                      const locPlans = plansByLocation[loc.id] || [];
-                      if (locPlans.length === 0) return null;
-                      const isExpanded = expandedLocationIds[loc.id] !== false;
+                </CardContent>
+              </Card>
+            ) : isCommercial ? (
+              /* Commercial: group by location */
+              <div className="space-y-6">
+                {/* Maintenance Payment Summary */}
+                {(() => {
+                  const maintPayments = payments.filter((p) => p.type === "maintenance");
+                  const maintPaid = maintPayments.filter((p) => p.status === "succeeded").reduce((s, p) => s + (p.amount || 0), 0);
+                  const maintUnpaid = maintPayments.filter((p) => p.status !== "succeeded").reduce((s, p) => s + (p.amount || 0), 0);
+                  return (
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800/40 p-4">
+                        <p className="text-xs font-semibold text-green-600 uppercase tracking-wider">Total Paid</p>
+                        <p className="text-2xl font-bold text-green-700 dark:text-green-400">${maintPaid.toFixed(2)}</p>
+                      </div>
+                      <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 p-4">
+                        <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider">Total Unpaid</p>
+                        <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">${maintUnpaid.toFixed(2)}</p>
+                      </div>
+                      <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/40 p-4">
+                        <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Avg Price/Visit</p>
+                        <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">
+                          ${(() => {
+                            const prices = maintenancePlans.filter((p) => p.price_per_visit).map((p) => p.price_per_visit!);
+                            return prices.length > 0 ? (prices.reduce((a, b) => a + b, 0) / prices.length).toFixed(2) : "0.00";
+                          })()}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
 
-                      return (
-                        <div key={loc.id} className="border rounded-lg overflow-hidden">
-                          <button
-                            onClick={() => toggleLocationExpand(loc.id)}
-                            className="w-full flex items-center gap-3 px-4 py-3 bg-purple-50/50 hover:bg-purple-50 dark:bg-purple-950/20 dark:hover:bg-purple-950/30 transition-colors"
-                          >
-                            {isExpanded ? (
-                              <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                            ) : (
-                              <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                            )}
-                            <Building2 className="w-4 h-4 text-purple-600" />
-                            <span className="font-semibold text-foreground">{loc.name}</span>
-                            <Badge variant="outline" className="text-xs border-purple-200 text-purple-600">
-                              {locPlans.filter((p) => p.status === "active").length} active
-                            </Badge>
-                          </button>
-                          {isExpanded && (
-                            <div className="p-4 space-y-3">
-                              {locPlans.map((plan) => {
-                                const planVisits = maintenanceVisits.filter(
-                                  (v) => v.maintenance_plan_id === plan.id
-                                );
-                                const today = new Date().toISOString().split("T")[0];
-                                const upcomingVisits = planVisits.filter(
-                                  (v) => v.visit_date >= today && v.status !== "cancelled"
-                                );
-                                const completedVisits = planVisits.filter(
-                                  (v) => v.status === "completed"
-                                );
+                {/* Per-location plan groups */}
+                {locations.map((loc) => {
+                  const locPlans = plansByLocation[loc.id] || [];
+                  if (locPlans.length === 0) return null;
+                  const isExpanded = expandedLocationIds[loc.id] !== false;
 
-                                return (
-                                  <div key={plan.id} className="border border-border rounded-lg p-4 bg-card shadow-sm">
-                                    <div className="flex items-center justify-between mb-3">
-                                      <h3 className="font-semibold text-foreground">
-                                        {plan.title || "Maintenance Plan"}
-                                      </h3>
-                                      <Badge
-                                        className={
-                                          plan.status === "active"
-                                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                            : "bg-gray-100 text-gray-700 dark:bg-gray-800/40 dark:text-gray-400"
-                                        }
-                                      >
-                                        {plan.status}
-                                      </Badge>
-                                    </div>
-                                    <div className="grid grid-cols-3 gap-4 text-sm">
-                                      <div>
-                                        <p className="text-muted-foreground">Total Visits</p>
-                                        <p className="font-medium">{planVisits.length}</p>
-                                      </div>
-                                      <div>
-                                        <p className="text-muted-foreground">Completed</p>
-                                        <p className="font-medium text-green-600">
-                                          {completedVisits.length}
-                                        </p>
-                                      </div>
-                                      <div>
-                                        <p className="text-muted-foreground">Upcoming</p>
-                                        <p className="font-medium text-blue-600">
-                                          {upcomingVisits.length}
-                                        </p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {/* Unassigned plans (no location) */}
-                    {(plansByLocation["unassigned"] || []).length > 0 && (
-                      <div className="border rounded-lg overflow-hidden">
-                        <div className="flex items-center gap-3 px-4 py-3 bg-muted">
-                          <Wrench className="w-4 h-4 text-muted-foreground" />
-                          <span className="font-semibold text-foreground">No Location Assigned</span>
-                        </div>
-                        <div className="p-4 space-y-3">
-                          {(plansByLocation["unassigned"] || []).map((plan) => {
+                  return (
+                    <div key={loc.id} className="border rounded-lg overflow-hidden">
+                      <button
+                        onClick={() => toggleLocationExpand(loc.id)}
+                        className="w-full flex items-center gap-3 px-4 py-3 bg-purple-50/50 hover:bg-purple-50 dark:bg-purple-950/20 dark:hover:bg-purple-950/30 transition-colors"
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                        )}
+                        <Building2 className="w-4 h-4 text-purple-600" />
+                        <span className="font-semibold text-foreground">{loc.name}</span>
+                        <Badge variant="outline" className="text-xs border-purple-200 text-purple-600">
+                          {locPlans.filter((p) => p.status === "active").length} active
+                        </Badge>
+                      </button>
+                      {isExpanded && (
+                        <div className="p-4 space-y-4">
+                          {locPlans.map((plan) => {
                             const planVisits = maintenanceVisits.filter(
                               (v) => v.maintenance_plan_id === plan.id
                             );
                             const today = new Date().toISOString().split("T")[0];
-                            const upcomingVisits = planVisits.filter(
-                              (v) => v.visit_date >= today && v.status !== "cancelled"
+                            const scheduledVisits = planVisits.filter(
+                              (v) => v.status === "scheduled"
                             );
-                            const completedVisits = planVisits.filter(
-                              (v) => v.status === "completed"
+                            const upcomingScheduled = scheduledVisits.filter(
+                              (v) => v.visit_date >= today
                             );
+                            const overdueVisits = scheduledVisits.filter(
+                              (v) => v.visit_date < today
+                            );
+                            const historyVisits = planVisits.filter(
+                              (v) => v.status === "completed" || v.status === "cancelled"
+                            );
+                            const nextVisit = upcomingScheduled.sort((a, b) => a.visit_date.localeCompare(b.visit_date))[0];
 
                             return (
-                              <div key={plan.id} className="border border-border rounded-lg p-4 bg-card shadow-sm">
+                              <div key={plan.id} className="space-y-4">
+                                {/* Active Plan Card */}
+                                <Card className="shadow-sm">
+                                  <CardContent className="p-4">
+                                    <div className="flex items-center justify-between mb-3">
+                                      <h3 className="font-semibold text-foreground text-lg">
+                                        {plan.title || "Maintenance Plan"}
+                                      </h3>
+                                      <div className="flex items-center gap-2">
+                                        <Badge
+                                          className={
+                                            plan.status === "active"
+                                              ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                              : "bg-gray-100 text-gray-700 dark:bg-gray-800/40 dark:text-gray-400"
+                                          }
+                                        >
+                                          {plan.status}
+                                        </Badge>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 text-xs"
+                                          onClick={() => setEditingPlan(plan)}
+                                        >
+                                          <Pencil className="w-3 h-3 mr-1" />
+                                          Edit Plan
+                                        </Button>
+                                      </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                      <div>
+                                        <p className="text-muted-foreground">Frequency</p>
+                                        <p className="font-medium capitalize">{plan.frequency}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-muted-foreground">Next Visit</p>
+                                        <p className="font-medium">
+                                          {nextVisit
+                                            ? new Date(nextVisit.visit_date).toLocaleDateString()
+                                            : "None scheduled"}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-muted-foreground">Price/Visit</p>
+                                        <p className="font-medium">${plan.price_per_visit?.toFixed(2) || "0.00"}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-muted-foreground">Assigned Crew</p>
+                                        <p className="font-medium">
+                                          {plan.assigned_team_id || plan.assigned_employee_ids?.length
+                                            ? `${plan.assigned_employee_ids?.length || 0} member(s)`
+                                            : "Unassigned"}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+
+                                {/* Upcoming / Scheduled Visits */}
+                                {(upcomingScheduled.length > 0 || overdueVisits.length > 0) && (
+                                  <Card className="shadow-sm">
+                                    <CardHeader className="pb-3">
+                                      <CardTitle className="text-base">Upcoming / Scheduled Visits</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                      <div className="rounded-lg border">
+                                        <Table>
+                                          <TableHeader>
+                                            <TableRow>
+                                              <TableHead>Date</TableHead>
+                                              <TableHead>Service</TableHead>
+                                              <TableHead>Status</TableHead>
+                                              <TableHead>Payment</TableHead>
+                                            </TableRow>
+                                          </TableHeader>
+                                          <TableBody>
+                                            {[...overdueVisits, ...upcomingScheduled]
+                                              .sort((a, b) => a.visit_date.localeCompare(b.visit_date))
+                                              .map((visit) => {
+                                                const isOverdue = visit.visit_date < today;
+                                                return (
+                                                  <TableRow key={visit.id}>
+                                                    <TableCell className="font-medium">
+                                                      {new Date(visit.visit_date).toLocaleDateString()}
+                                                    </TableCell>
+                                                    <TableCell>{visit.service_performed || "General maintenance"}</TableCell>
+                                                    <TableCell>
+                                                      <Badge className={
+                                                        isOverdue
+                                                          ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                                                          : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                                                      }>
+                                                        {isOverdue ? "overdue" : "scheduled"}
+                                                      </Badge>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                      <Badge className={
+                                                        visit.payment_status === "paid"
+                                                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                                          : "bg-gray-100 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400"
+                                                      }>
+                                                        {visit.payment_status || "unpaid"}
+                                                      </Badge>
+                                                    </TableCell>
+                                                  </TableRow>
+                                                );
+                                              })}
+                                          </TableBody>
+                                        </Table>
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                )}
+
+                                {/* Service History */}
+                                {historyVisits.length > 0 && (
+                                  <Card className="shadow-sm">
+                                    <CardHeader className="pb-3">
+                                      <CardTitle className="text-base">Service History</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                      <div className="rounded-lg border">
+                                        <Table>
+                                          <TableHeader>
+                                            <TableRow>
+                                              <TableHead>Date</TableHead>
+                                              <TableHead>Service</TableHead>
+                                              <TableHead>Status</TableHead>
+                                              <TableHead>Payment</TableHead>
+                                            </TableRow>
+                                          </TableHeader>
+                                          <TableBody>
+                                            {historyVisits
+                                              .sort((a, b) => b.visit_date.localeCompare(a.visit_date))
+                                              .map((visit) => (
+                                                <TableRow key={visit.id}>
+                                                  <TableCell className="font-medium">
+                                                    {new Date(visit.visit_date).toLocaleDateString()}
+                                                  </TableCell>
+                                                  <TableCell>{visit.service_performed || "General maintenance"}</TableCell>
+                                                  <TableCell>
+                                                    <Badge className={
+                                                      visit.status === "completed"
+                                                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                                        : "bg-gray-100 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400"
+                                                    }>
+                                                      {visit.status}
+                                                    </Badge>
+                                                  </TableCell>
+                                                  <TableCell>
+                                                    <Badge className={
+                                                      visit.payment_status === "paid"
+                                                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                                        : "bg-gray-100 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400"
+                                                    }>
+                                                      {visit.payment_status || "unpaid"}
+                                                    </Badge>
+                                                  </TableCell>
+                                                </TableRow>
+                                              ))}
+                                          </TableBody>
+                                        </Table>
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Unassigned plans (no location) */}
+                {(plansByLocation["unassigned"] || []).length > 0 && (
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="flex items-center gap-3 px-4 py-3 bg-muted">
+                      <Wrench className="w-4 h-4 text-muted-foreground" />
+                      <span className="font-semibold text-foreground">No Location Assigned</span>
+                    </div>
+                    <div className="p-4 space-y-4">
+                      {(plansByLocation["unassigned"] || []).map((plan) => {
+                        const planVisits = maintenanceVisits.filter(
+                          (v) => v.maintenance_plan_id === plan.id
+                        );
+                        const today = new Date().toISOString().split("T")[0];
+                        const scheduledVisits = planVisits.filter((v) => v.status === "scheduled");
+                        const upcomingScheduled = scheduledVisits.filter((v) => v.visit_date >= today);
+                        const overdueVisits = scheduledVisits.filter((v) => v.visit_date < today);
+                        const historyVisits = planVisits.filter((v) => v.status === "completed" || v.status === "cancelled");
+                        const nextVisit = upcomingScheduled.sort((a, b) => a.visit_date.localeCompare(b.visit_date))[0];
+
+                        return (
+                          <div key={plan.id} className="space-y-4">
+                            <Card className="shadow-sm">
+                              <CardContent className="p-4">
                                 <div className="flex items-center justify-between mb-3">
-                                  <h3 className="font-semibold text-foreground">
+                                  <h3 className="font-semibold text-foreground text-lg">
                                     {plan.title || "Maintenance Plan"}
                                   </h3>
                                   <Badge
@@ -1220,90 +1615,359 @@ export default function ContactDetailPage({
                                     {plan.status}
                                   </Badge>
                                 </div>
-                                <div className="grid grid-cols-3 gap-4 text-sm">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                                   <div>
-                                    <p className="text-muted-foreground">Total Visits</p>
-                                    <p className="font-medium">{planVisits.length}</p>
+                                    <p className="text-muted-foreground">Frequency</p>
+                                    <p className="font-medium capitalize">{plan.frequency}</p>
                                   </div>
                                   <div>
-                                    <p className="text-muted-foreground">Completed</p>
-                                    <p className="font-medium text-green-600">
-                                      {completedVisits.length}
+                                    <p className="text-muted-foreground">Next Visit</p>
+                                    <p className="font-medium">
+                                      {nextVisit
+                                        ? new Date(nextVisit.visit_date).toLocaleDateString()
+                                        : "None scheduled"}
                                     </p>
                                   </div>
                                   <div>
-                                    <p className="text-muted-foreground">Upcoming</p>
-                                    <p className="font-medium text-blue-600">
-                                      {upcomingVisits.length}
+                                    <p className="text-muted-foreground">Price/Visit</p>
+                                    <p className="font-medium">${plan.price_per_visit?.toFixed(2) || "0.00"}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-muted-foreground">Assigned Crew</p>
+                                    <p className="font-medium">
+                                      {plan.assigned_team_id || plan.assigned_employee_ids?.length
+                                        ? `${plan.assigned_employee_ids?.length || 0} member(s)`
+                                        : "Unassigned"}
                                     </p>
                                   </div>
                                 </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  /* Residential: flat plan list */
-                  <div className="space-y-4">
-                    {maintenancePlans.map((plan) => {
-                      const planVisits = maintenanceVisits.filter(
-                        (v) => v.maintenance_plan_id === plan.id
-                      );
-                      const today = new Date().toISOString().split("T")[0];
-                      const upcomingVisits = planVisits.filter(
-                        (v) => v.visit_date >= today && v.status !== "cancelled"
-                      );
-                      const completedVisits = planVisits.filter(
-                        (v) => v.status === "completed"
-                      );
+                              </CardContent>
+                            </Card>
 
-                      return (
-                        <div
-                          key={plan.id}
-                          className="border border-border rounded-lg p-4 bg-card shadow-sm"
-                        >
-                          <div className="flex items-center justify-between mb-3">
-                            <h3 className="font-semibold text-foreground">
-                              {plan.title || "Maintenance Plan"}
-                            </h3>
-                            <Badge
-                              className={
-                                plan.status === "active"
-                                  ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                  : "bg-gray-100 text-gray-700 dark:bg-gray-800/40 dark:text-gray-400"
-                              }
-                            >
-                              {plan.status}
-                            </Badge>
+                            {(upcomingScheduled.length > 0 || overdueVisits.length > 0) && (
+                              <Card className="shadow-sm">
+                                <CardHeader className="pb-3">
+                                  <CardTitle className="text-base">Upcoming / Scheduled Visits</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                  <div className="rounded-lg border">
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead>Date</TableHead>
+                                          <TableHead>Service</TableHead>
+                                          <TableHead>Status</TableHead>
+                                          <TableHead>Payment</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {[...overdueVisits, ...upcomingScheduled]
+                                          .sort((a, b) => a.visit_date.localeCompare(b.visit_date))
+                                          .map((visit) => {
+                                            const isOverdue = visit.visit_date < today;
+                                            return (
+                                              <TableRow key={visit.id}>
+                                                <TableCell className="font-medium">
+                                                  {new Date(visit.visit_date).toLocaleDateString()}
+                                                </TableCell>
+                                                <TableCell>{visit.service_performed || "General maintenance"}</TableCell>
+                                                <TableCell>
+                                                  <Badge className={
+                                                    isOverdue
+                                                      ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                                                      : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                                                  }>
+                                                    {isOverdue ? "overdue" : "scheduled"}
+                                                  </Badge>
+                                                </TableCell>
+                                                <TableCell>
+                                                  <Badge className={
+                                                    visit.payment_status === "paid"
+                                                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                                      : "bg-gray-100 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400"
+                                                  }>
+                                                    {visit.payment_status || "unpaid"}
+                                                  </Badge>
+                                                </TableCell>
+                                              </TableRow>
+                                            );
+                                          })}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            )}
+
+                            {historyVisits.length > 0 && (
+                              <Card className="shadow-sm">
+                                <CardHeader className="pb-3">
+                                  <CardTitle className="text-base">Service History</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                  <div className="rounded-lg border">
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead>Date</TableHead>
+                                          <TableHead>Service</TableHead>
+                                          <TableHead>Status</TableHead>
+                                          <TableHead>Payment</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {historyVisits
+                                          .sort((a, b) => b.visit_date.localeCompare(a.visit_date))
+                                          .map((visit) => (
+                                            <TableRow key={visit.id}>
+                                              <TableCell className="font-medium">
+                                                {new Date(visit.visit_date).toLocaleDateString()}
+                                              </TableCell>
+                                              <TableCell>{visit.service_performed || "General maintenance"}</TableCell>
+                                              <TableCell>
+                                                <Badge className={
+                                                  visit.status === "completed"
+                                                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                                    : "bg-gray-100 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400"
+                                                }>
+                                                  {visit.status}
+                                                </Badge>
+                                              </TableCell>
+                                              <TableCell>
+                                                <Badge className={
+                                                  visit.payment_status === "paid"
+                                                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                                    : "bg-gray-100 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400"
+                                                }>
+                                                  {visit.payment_status || "unpaid"}
+                                                </Badge>
+                                              </TableCell>
+                                            </TableRow>
+                                          ))}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            )}
                           </div>
-                          <div className="grid grid-cols-3 gap-4 text-sm">
-                            <div>
-                              <p className="text-muted-foreground">Total Visits</p>
-                              <p className="font-medium">{planVisits.length}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Completed</p>
-                              <p className="font-medium text-green-600">
-                                {completedVisits.length}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Upcoming</p>
-                              <p className="font-medium text-blue-600">
-                                {upcomingVisits.length}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            ) : (
+              /* Residential: flat plan list with structured sections */
+              <div className="space-y-6">
+                {/* Maintenance Payment Summary */}
+                {(() => {
+                  const maintPayments = payments.filter((p) => p.type === "maintenance");
+                  const maintPaid = maintPayments.filter((p) => p.status === "succeeded").reduce((s, p) => s + (p.amount || 0), 0);
+                  const maintUnpaid = maintPayments.filter((p) => p.status !== "succeeded").reduce((s, p) => s + (p.amount || 0), 0);
+                  return (
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800/40 p-4">
+                        <p className="text-xs font-semibold text-green-600 uppercase tracking-wider">Total Paid</p>
+                        <p className="text-2xl font-bold text-green-700 dark:text-green-400">${maintPaid.toFixed(2)}</p>
+                      </div>
+                      <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 p-4">
+                        <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider">Total Unpaid</p>
+                        <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">${maintUnpaid.toFixed(2)}</p>
+                      </div>
+                      <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/40 p-4">
+                        <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Price/Visit</p>
+                        <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">
+                          ${maintenancePlan?.price_per_visit?.toFixed(2) || "0.00"}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {maintenancePlans.map((plan) => {
+                  const planVisits = maintenanceVisits.filter(
+                    (v) => v.maintenance_plan_id === plan.id
+                  );
+                  const today = new Date().toISOString().split("T")[0];
+                  const scheduledVisits = planVisits.filter((v) => v.status === "scheduled");
+                  const upcomingScheduled = scheduledVisits.filter((v) => v.visit_date >= today);
+                  const overdueVisits = scheduledVisits.filter((v) => v.visit_date < today);
+                  const historyVisits = planVisits.filter((v) => v.status === "completed" || v.status === "cancelled");
+                  const nextVisit = upcomingScheduled.sort((a, b) => a.visit_date.localeCompare(b.visit_date))[0];
+
+                  return (
+                    <div key={plan.id} className="space-y-4">
+                      {/* Active Plan Card */}
+                      <Card className="shadow-sm">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <h3 className="font-semibold text-foreground text-lg">
+                              {plan.title || "Maintenance Plan"}
+                            </h3>
+                            <div className="flex items-center gap-2">
+                              <Badge
+                                className={
+                                  plan.status === "active"
+                                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                    : "bg-gray-100 text-gray-700 dark:bg-gray-800/40 dark:text-gray-400"
+                                }
+                              >
+                                {plan.status}
+                              </Badge>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => setEditingPlan(plan)}
+                              >
+                                <Pencil className="w-3 h-3 mr-1" />
+                                Edit Plan
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                            <div>
+                              <p className="text-muted-foreground">Frequency</p>
+                              <p className="font-medium capitalize">{plan.frequency}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Next Visit</p>
+                              <p className="font-medium">
+                                {nextVisit
+                                  ? new Date(nextVisit.visit_date).toLocaleDateString()
+                                  : "None scheduled"}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Price/Visit</p>
+                              <p className="font-medium">${plan.price_per_visit?.toFixed(2) || "0.00"}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Assigned Crew</p>
+                              <p className="font-medium">
+                                {plan.assigned_team_id || plan.assigned_employee_ids?.length
+                                  ? `${plan.assigned_employee_ids?.length || 0} member(s)`
+                                  : "Unassigned"}
+                              </p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Upcoming / Scheduled Visits */}
+                      {(upcomingScheduled.length > 0 || overdueVisits.length > 0) && (
+                        <Card className="shadow-sm">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base">Upcoming / Scheduled Visits</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="rounded-lg border">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead>Service</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Payment</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {[...overdueVisits, ...upcomingScheduled]
+                                    .sort((a, b) => a.visit_date.localeCompare(b.visit_date))
+                                    .map((visit) => {
+                                      const isOverdue = visit.visit_date < today;
+                                      return (
+                                        <TableRow key={visit.id}>
+                                          <TableCell className="font-medium">
+                                            {new Date(visit.visit_date).toLocaleDateString()}
+                                          </TableCell>
+                                          <TableCell>{visit.service_performed || "General maintenance"}</TableCell>
+                                          <TableCell>
+                                            <Badge className={
+                                              isOverdue
+                                                ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                                                : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                                            }>
+                                              {isOverdue ? "overdue" : "scheduled"}
+                                            </Badge>
+                                          </TableCell>
+                                          <TableCell>
+                                            <Badge className={
+                                              visit.payment_status === "paid"
+                                                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                                : "bg-gray-100 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400"
+                                            }>
+                                              {visit.payment_status || "unpaid"}
+                                            </Badge>
+                                          </TableCell>
+                                        </TableRow>
+                                      );
+                                    })}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* Service History */}
+                      {historyVisits.length > 0 && (
+                        <Card className="shadow-sm">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base">Service History</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="rounded-lg border">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead>Service</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Payment</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {historyVisits
+                                    .sort((a, b) => b.visit_date.localeCompare(a.visit_date))
+                                    .map((visit) => (
+                                      <TableRow key={visit.id}>
+                                        <TableCell className="font-medium">
+                                          {new Date(visit.visit_date).toLocaleDateString()}
+                                        </TableCell>
+                                        <TableCell>{visit.service_performed || "General maintenance"}</TableCell>
+                                        <TableCell>
+                                          <Badge className={
+                                            visit.status === "completed"
+                                              ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                              : "bg-gray-100 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400"
+                                          }>
+                                            {visit.status}
+                                          </Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                          <Badge className={
+                                            visit.payment_status === "paid"
+                                              ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                              : "bg-gray-100 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400"
+                                          }>
+                                            {visit.payment_status || "unpaid"}
+                                          </Badge>
+                                        </TableCell>
+                                      </TableRow>
+                                    ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </TabsContent>
 
           {/* Payments Tab */}
@@ -1320,7 +1984,110 @@ export default function ContactDetailPage({
                     </div>
                     <p className="text-muted-foreground">No payments yet for this client.</p>
                   </div>
+                ) : isCommercial && locations.length > 0 ? (
+                  /* Commercial: group payments by location */
+                  <div className="space-y-6">
+                    {/* Summary */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800/40 p-4">
+                        <p className="text-xs font-semibold text-green-600 uppercase tracking-wider">Total Paid</p>
+                        <p className="text-2xl font-bold text-green-700 dark:text-green-400">
+                          ${payments.filter((p) => p.status === "succeeded").reduce((s, p) => s + (p.amount || 0), 0).toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 p-4">
+                        <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider">Total Unpaid</p>
+                        <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">
+                          ${payments.filter((p) => p.status !== "succeeded").reduce((s, p) => s + (p.amount || 0), 0).toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Per-location breakdown */}
+                    {locations.map((loc) => {
+                      const locPayments = payments.filter((p) => p.location_id === loc.id);
+                      if (locPayments.length === 0) return null;
+                      const locPaid = locPayments.filter((p) => p.status === "succeeded").reduce((s, p) => s + (p.amount || 0), 0);
+                      const locUnpaid = locPayments.filter((p) => p.status !== "succeeded").reduce((s, p) => s + (p.amount || 0), 0);
+                      return (
+                        <div key={loc.id} className="border rounded-lg overflow-hidden">
+                          <div className="bg-muted px-4 py-3 flex items-center justify-between">
+                            <div>
+                              <p className="font-semibold text-foreground text-sm">{loc.name}</p>
+                              <p className="text-xs text-muted-foreground">{loc.city}, {loc.state}</p>
+                            </div>
+                            <div className="flex gap-4 text-xs">
+                              <span className="text-green-600 font-semibold">Paid: ${locPaid.toFixed(2)}</span>
+                              {locUnpaid > 0 && <span className="text-amber-600 font-semibold">Unpaid: ${locUnpaid.toFixed(2)}</span>}
+                            </div>
+                          </div>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Type</TableHead>
+                                <TableHead>Amount</TableHead>
+                                <TableHead>Status</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {locPayments.map((payment) => (
+                                <TableRow key={payment.id}>
+                                  <TableCell className="font-medium">
+                                    {new Date(payment.created_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+                                  </TableCell>
+                                  <TableCell>{formatPaymentType(payment.type)}</TableCell>
+                                  <TableCell className="font-semibold">${(payment.amount || 0).toFixed(2)}</TableCell>
+                                  <TableCell>
+                                    <Badge className={getPaymentStatusColor(payment.status)}>{getPaymentStatusDisplay(payment.status)}</Badge>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      );
+                    })}
+
+                    {/* Payments without a location */}
+                    {(() => {
+                      const unlocated = payments.filter((p) => !p.location_id || !locations.some((l) => l.id === p.location_id));
+                      if (unlocated.length === 0) return null;
+                      return (
+                        <div className="border rounded-lg overflow-hidden">
+                          <div className="bg-muted px-4 py-3">
+                            <p className="font-semibold text-foreground text-sm">No Location Assigned</p>
+                          </div>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Type</TableHead>
+                                <TableHead>Amount</TableHead>
+                                <TableHead>Status</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {unlocated.map((payment) => (
+                                <TableRow key={payment.id}>
+                                  <TableCell className="font-medium">
+                                    {new Date(payment.created_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+                                  </TableCell>
+                                  <TableCell>{formatPaymentType(payment.type)}</TableCell>
+                                  <TableCell className="font-semibold">${(payment.amount || 0).toFixed(2)}</TableCell>
+                                  <TableCell>
+                                    <Badge className={getPaymentStatusColor(payment.status)}>{getPaymentStatusDisplay(payment.status)}</Badge>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      );
+                    })()}
+                  </div>
                 ) : (
+                  /* Residential: flat table */
                   <div className="rounded-lg border">
                     <Table>
                       <TableHeader>
@@ -1366,25 +2133,6 @@ export default function ContactDetailPage({
             </Card>
           </TabsContent>
 
-          {/* Photos Tab */}
-          <TabsContent value="photos">
-            <Card>
-              <CardHeader>
-                <CardTitle>Photos</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12">
-                  <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Image className="w-8 h-8 text-muted-foreground" />
-                  </div>
-                  <p className="text-muted-foreground">
-                    Photo management coming soon. Upload and organize project photos for this
-                    client.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
         </Tabs>
 
         {/* Dialogs */}
@@ -1414,6 +2162,14 @@ export default function ContactDetailPage({
               location={editingLocation}
             />
           </>
+        )}
+
+        {editingPlan && (
+          <EditMaintenancePlanDialog
+            open={!!editingPlan}
+            onOpenChange={(open) => !open && setEditingPlan(null)}
+            plan={editingPlan}
+          />
         )}
       </div>
     </div>

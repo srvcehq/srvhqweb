@@ -65,7 +65,7 @@ export default function CreateContactDialog({
     city: (prefillData.city as string) || "",
     state: (prefillData.state as string) || "",
     zip: (prefillData.zip as string) || "",
-    notes: "",
+    notes: (prefillData.notes as string) || "",
     company_name: "",
     contact_type: "residential" as "residential" | "commercial",
   });

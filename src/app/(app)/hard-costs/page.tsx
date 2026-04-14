@@ -1,14 +1,16 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { db } from "@/data/api";
 import { HardCost } from "@/data/types";
 import { useCompany } from "@/providers/company-provider";
+import { formatCurrency } from "@/lib/format-helpers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -41,7 +43,58 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Plus, Trash2, DollarSign, Pencil } from "lucide-react";
 
-const CATEGORIES = ["Materials", "Equipment", "Labor", "Subcontractor", "Misc"];
+/* ------------------------------------------------------------------ */
+/* Config                                                              */
+/* ------------------------------------------------------------------ */
+
+const CATEGORIES: { value: HardCost["category"]; label: string }[] = [
+  { value: "equipment", label: "Equipment" },
+  { value: "insurance", label: "Insurance" },
+  { value: "rent", label: "Rent" },
+  { value: "software", label: "Software" },
+  { value: "fuel", label: "Fuel" },
+  { value: "vehicle", label: "Vehicle" },
+  { value: "other", label: "Other" },
+];
+
+const COST_BASIS: { value: NonNullable<HardCost["cost_basis"]>; label: string }[] = [
+  { value: "per_job", label: "Per Job" },
+  { value: "per_visit", label: "Per Visit" },
+  { value: "per_hour", label: "Per Hour" },
+  { value: "flat", label: "Flat" },
+];
+
+function categoryBadgeClass(category?: string) {
+  switch (category) {
+    case "equipment":
+      return "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-800/40";
+    case "insurance":
+      return "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-800/40";
+    case "rent":
+      return "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-800/40";
+    case "software":
+      return "bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/20 dark:text-cyan-400 dark:border-cyan-800/40";
+    case "fuel":
+      return "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/20 dark:text-orange-400 dark:border-orange-800/40";
+    case "vehicle":
+      return "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/20 dark:text-green-400 dark:border-green-800/40";
+    default:
+      return "bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-800/40 dark:text-gray-400 dark:border-gray-700";
+  }
+}
+
+function costBasisLabel(basis?: string) {
+  return COST_BASIS.find((b) => b.value === basis)?.label || "Per Job";
+}
+
+function categoryLabel(cat?: string) {
+  return CATEGORIES.find((c) => c.value === cat)?.label || "Other";
+}
+
+
+/* ------------------------------------------------------------------ */
+/* Page                                                                */
+/* ------------------------------------------------------------------ */
 
 export default function HardCostsPage() {
   const { currentCompanyId } = useCompany();
@@ -53,14 +106,14 @@ export default function HardCostsPage() {
   const [pendingDelete, setPendingDelete] = useState<HardCost | null>(null);
   const [formData, setFormData] = useState({
     name: "",
-    category: "Materials",
-    cost: 0,
-    unit: "",
-    vendor: "",
+    monthly_cost: 0,
+    category: "equipment" as HardCost["category"],
+    cost_basis: "per_job" as HardCost["cost_basis"],
     notes: "",
+    is_active: true,
   });
 
-  // Load data on mount
+  // Load data
   React.useEffect(() => {
     async function load() {
       const data = await db.HardCost.filter({ company_id: currentCompanyId });
@@ -70,17 +123,28 @@ export default function HardCostsPage() {
     load();
   }, [currentCompanyId]);
 
-  const totalCost = hardCosts.reduce((sum, c) => sum + (c.cost || 0), 0);
+  // Computed totals
+  const totals = useMemo(() => {
+    const activeMonthly = hardCosts
+      .filter((c) => c.is_active)
+      .reduce((sum, c) => sum + (c.monthly_cost || 0), 0);
+    return {
+      activeMonthly,
+      activeDaily: activeMonthly / 30,
+      activeCount: hardCosts.filter((c) => c.is_active).length,
+      totalCount: hardCosts.length,
+    };
+  }, [hardCosts]);
 
   const handleAdd = () => {
     setEditingCost(null);
     setFormData({
       name: "",
-      category: "Materials",
-      cost: 0,
-      unit: "",
-      vendor: "",
+      monthly_cost: 0,
+      category: "equipment",
+      cost_basis: "per_job",
       notes: "",
+      is_active: true,
     });
     setShowDialog(true);
   };
@@ -89,11 +153,11 @@ export default function HardCostsPage() {
     setEditingCost(cost);
     setFormData({
       name: cost.name,
-      category: cost.category || "Misc",
-      cost: cost.cost,
-      unit: cost.unit || "",
-      vendor: cost.vendor || "",
+      monthly_cost: cost.monthly_cost,
+      category: cost.category || "other",
+      cost_basis: cost.cost_basis || "per_job",
       notes: cost.notes || "",
+      is_active: cost.is_active,
     });
     setShowDialog(true);
   };
@@ -102,7 +166,7 @@ export default function HardCostsPage() {
     e.preventDefault();
     const data = {
       ...formData,
-      cost: parseFloat(String(formData.cost)) || 0,
+      monthly_cost: parseFloat(String(formData.monthly_cost)) || 0,
       company_id: currentCompanyId,
     };
 
@@ -118,6 +182,17 @@ export default function HardCostsPage() {
       setHardCosts((prev) => [...prev, created]);
     }
     setShowDialog(false);
+  };
+
+  const handleToggleActive = async (cost: HardCost) => {
+    const updated = await db.HardCost.update(cost.id, {
+      is_active: !cost.is_active,
+    });
+    if (updated) {
+      setHardCosts((prev) =>
+        prev.map((c) => (c.id === cost.id ? updated : c))
+      );
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -141,9 +216,11 @@ export default function HardCostsPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-3xl md:text-4xl font-bold text-foreground">Hard Costs</h1>
+            <h1 className="text-3xl md:text-4xl font-bold text-foreground">
+              Hard Costs
+            </h1>
             <p className="text-muted-foreground mt-2">
-              Manage material, equipment, and overhead cost items
+              Monthly overhead costs used in bid profit calculations
             </p>
           </div>
           <Button
@@ -155,30 +232,51 @@ export default function HardCostsPage() {
           </Button>
         </div>
 
-        {/* Summary Card */}
-        <Card className="bg-gradient-to-r from-card-header-from to-card-header-to border-green-200 dark:border-green-800/40">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Hard Costs Catalog</p>
-                <p className="text-3xl font-bold text-green-600">
-                  {hardCosts.length} items
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Combined value: ${totalCost.toFixed(2)}
-                </p>
-              </div>
-              <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center shadow-lg">
-                <DollarSign className="w-8 h-8 text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="bg-gradient-to-r from-card-header-from to-card-header-to border-green-200 dark:border-green-800/40">
+            <CardContent className="p-5">
+              <p className="text-sm text-muted-foreground">
+                Total Active Monthly Costs
+              </p>
+              <p className="text-3xl font-bold text-green-600 mt-1">
+                {formatCurrency(totals.activeMonthly)}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {totals.activeCount} of {totals.totalCount} costs active
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <p className="text-sm text-muted-foreground">Daily Rate</p>
+              <p className="text-3xl font-bold text-foreground mt-1">
+                {formatCurrency(totals.activeDaily)}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Monthly &divide; 30 days
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <p className="text-sm text-muted-foreground">
+                Example: 5-Day Job
+              </p>
+              <p className="text-3xl font-bold text-foreground mt-1">
+                {formatCurrency(totals.activeDaily * 5)}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Added to internal cost on bids
+              </p>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Table */}
         <Card className="shadow-lg">
           <CardHeader className="bg-gradient-to-r from-card-header-from to-card-header-to border-b">
-            <CardTitle>Hard Cost Items</CardTitle>
+            <CardTitle>Overhead Items</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             {hardCosts.length === 0 ? (
@@ -188,9 +286,13 @@ export default function HardCostsPage() {
                   No Hard Costs Yet
                 </h3>
                 <p className="text-muted-foreground mb-6">
-                  Add your first cost item to get started
+                  Add your monthly overhead costs to include them in bid
+                  calculations
                 </p>
-                <Button onClick={handleAdd} className="bg-green-600 hover:bg-green-700">
+                <Button
+                  onClick={handleAdd}
+                  className="bg-green-600 hover:bg-green-700"
+                >
                   <Plus className="w-4 h-4 mr-2" />
                   Add First Hard Cost
                 </Button>
@@ -202,63 +304,82 @@ export default function HardCostsPage() {
                     <TableRow className="bg-muted">
                       <TableHead>Name</TableHead>
                       <TableHead>Category</TableHead>
-                      <TableHead className="text-right">Cost</TableHead>
-                      <TableHead>Unit</TableHead>
-                      <TableHead>Vendor</TableHead>
-                      <TableHead>Notes</TableHead>
+                      <TableHead className="text-right">Monthly</TableHead>
+                      <TableHead className="text-right">Daily</TableHead>
+                      <TableHead>Basis</TableHead>
+                      <TableHead className="text-center">Active</TableHead>
                       <TableHead className="w-24">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {hardCosts.map((cost) => (
-                      <TableRow key={cost.id} className="hover:bg-accent/30">
-                        <TableCell className="font-medium">{cost.name}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={
-                              cost.category === "Equipment"
-                                ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-800/40"
-                                : cost.category === "Materials"
-                                  ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/20 dark:text-green-400 dark:border-green-800/40"
-                                  : "bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-800/40 dark:text-gray-400 dark:border-gray-700"
-                            }
-                          >
-                            {cost.category || "Misc"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-semibold text-green-600 font-mono">
-                          ${cost.cost?.toFixed(2) || "0.00"}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{cost.unit || "—"}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
-                          {cost.vendor || "—"}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-sm max-w-[200px] truncate">
-                          {cost.notes || "—"}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEdit(cost)}
-                              className="hover:bg-blue-50 h-8 w-8"
+                    {hardCosts.map((cost) => {
+                      const dailyCost = (cost.monthly_cost || 0) / 30;
+
+                      return (
+                        <TableRow
+                          key={cost.id}
+                          className={
+                            cost.is_active
+                              ? "hover:bg-accent/30"
+                              : "opacity-50 hover:bg-accent/30"
+                          }
+                        >
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{cost.name}</p>
+                              {cost.notes && (
+                                <p className="text-xs text-muted-foreground truncate max-w-[250px]">
+                                  {cost.notes}
+                                </p>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className={categoryBadgeClass(cost.category)}
                             >
-                              <Pencil className="w-4 h-4 text-blue-600" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setPendingDelete(cost)}
-                              className="hover:bg-red-50 h-8 w-8"
-                            >
-                              <Trash2 className="w-4 h-4 text-red-500" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                              {categoryLabel(cost.category)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-green-600 font-mono">
+                            {formatCurrency(cost.monthly_cost)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-muted-foreground">
+                            {formatCurrency(dailyCost)}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {costBasisLabel(cost.cost_basis)}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Switch
+                              checked={cost.is_active}
+                              onCheckedChange={() => handleToggleActive(cost)}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEdit(cost)}
+                                className="hover:bg-blue-50 dark:hover:bg-blue-950/20 h-8 w-8"
+                              >
+                                <Pencil className="w-4 h-4 text-blue-600" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setPendingDelete(cost)}
+                                className="hover:bg-red-50 dark:hover:bg-red-950/20 h-8 w-8"
+                              >
+                                <Trash2 className="w-4 h-4 text-red-500" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -269,27 +390,29 @@ export default function HardCostsPage() {
 
       {/* Add/Edit Dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold">
               {editingCost ? "Edit Hard Cost" : "Add Hard Cost"}
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-6 mt-4">
+          <form onSubmit={handleSubmit} className="space-y-5 mt-4">
             <div className="space-y-2">
-              <Label htmlFor="hc-name">Cost Name *</Label>
+              <Label htmlFor="hc-name">Name *</Label>
               <Input
                 id="hc-name"
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="e.g., Concrete Mix (80lb bag)"
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
+                placeholder="e.g., General Liability Insurance"
                 required
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="hc-cost">Cost *</Label>
+                <Label htmlFor="hc-cost">Monthly Cost *</Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                     $
@@ -299,57 +422,73 @@ export default function HardCostsPage() {
                     type="number"
                     min="0"
                     step="0.01"
-                    value={formData.cost}
+                    value={formData.monthly_cost || ""}
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        cost: parseFloat(e.target.value) || 0,
+                        monthly_cost: parseFloat(e.target.value) || 0,
                       })
                     }
                     className="pl-7"
                     required
                   />
                 </div>
+                {formData.monthly_cost > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Daily: {formatCurrency(formData.monthly_cost / 30)}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="hc-unit">Unit</Label>
-                <Input
-                  id="hc-unit"
-                  value={formData.unit}
-                  onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                  placeholder="e.g., bag, ton, day, ea"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="hc-category">Category *</Label>
+                <Label>Category</Label>
                 <Select
-                  value={formData.category}
-                  onValueChange={(val) => setFormData({ ...formData, category: val })}
+                  value={formData.category || "other"}
+                  onValueChange={(val) =>
+                    setFormData({
+                      ...formData,
+                      category: val as HardCost["category"],
+                    })
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {CATEGORIES.map((cat) => (
-                      <SelectItem key={cat} value={cat}>
-                        {cat}
+                      <SelectItem key={cat.value} value={cat.value!}>
+                        {cat.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="hc-vendor">Vendor</Label>
-                <Input
-                  id="hc-vendor"
-                  value={formData.vendor}
-                  onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
-                  placeholder="e.g., Home Depot"
-                />
-              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Cost Basis</Label>
+              <Select
+                value={formData.cost_basis || "per_job"}
+                onValueChange={(val) =>
+                  setFormData({
+                    ...formData,
+                    cost_basis: val as HardCost["cost_basis"],
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {COST_BASIS.map((basis) => (
+                    <SelectItem key={basis.value} value={basis.value}>
+                      {basis.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Determines how this cost is applied to bids
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -357,9 +496,11 @@ export default function HardCostsPage() {
               <Textarea
                 id="hc-notes"
                 value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                rows={3}
-                placeholder="Optional notes about this cost..."
+                onChange={(e) =>
+                  setFormData({ ...formData, notes: e.target.value })
+                }
+                rows={2}
+                placeholder="Optional notes..."
               />
             </div>
 
@@ -375,7 +516,7 @@ export default function HardCostsPage() {
                 type="submit"
                 className="bg-gradient-to-r from-green-500 to-emerald-600"
               >
-                {editingCost ? "Update Cost" : "Add Cost"}
+                {editingCost ? "Update" : "Add Cost"}
               </Button>
             </div>
           </form>
@@ -391,8 +532,8 @@ export default function HardCostsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete hard cost?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete &quot;{pendingDelete?.name}&quot;? This cannot
-              be undone.
+              Are you sure you want to delete &quot;{pendingDelete?.name}&quot;?
+              This will remove it from future bid calculations.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

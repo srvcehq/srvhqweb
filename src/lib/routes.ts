@@ -10,6 +10,8 @@ export const routes = {
   maintenancePlans: "/maintenance-plans",
   bidItems: "/bid-items",
   bids: "/bids",
+  bidsCreate: "/bids/create",
+  bidsEstimate: "/bids/estimate",
   doorToDoor: "/door-to-door",
   hardCosts: "/hard-costs",
   payments: "/payments",

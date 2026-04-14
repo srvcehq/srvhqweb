@@ -1,10 +1,14 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/data/api";
 import { useCompany } from "@/providers/company-provider";
+import { queryKeys } from "@/lib/query-keys";
+import { toast } from "sonner";
 import { formatAssignedCrew } from "@/hooks/use-employee-names";
+import CreateMaintenancePlanDialog from "@/components/contacts/create-maintenance-plan-dialog";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,14 +21,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,7 +43,7 @@ import {
   Building2,
 } from "lucide-react";
 import { getDisplayName } from "@/lib/contact-display";
-import type { Location } from "@/data/types";
+import type { Location, MaintenancePlan } from "@/data/types";
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
@@ -89,6 +85,8 @@ const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default function MaintenancePlansPage() {
   const { currentCompanyId } = useCompany();
+  const router = useRouter();
+  const queryClient = useQueryClient();
 
   // State
   const [searchQuery, setSearchQuery] = useState("");
@@ -96,9 +94,29 @@ export default function MaintenancePlansPage() {
   const [frequencyFilter, setFrequencyFilter] = useState("all");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
+  // Archive mutation
+  const archiveMutation = useMutation({
+    mutationFn: (planId: string) =>
+      db.MaintenancePlan.update(planId, { deleted_at: new Date().toISOString() }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.maintenancePlans(currentCompanyId) });
+      toast.success("Plan archived.");
+    },
+  });
+
+  // Pause/Resume mutation
+  const statusMutation = useMutation({
+    mutationFn: ({ planId, status }: { planId: string; status: MaintenancePlan["status"] }) =>
+      db.MaintenancePlan.update(planId, { status }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.maintenancePlans(currentCompanyId) });
+      toast.success("Plan status updated.");
+    },
+  });
+
   // Data fetching
   const { data: plans = [], isLoading: plansLoading } = useQuery({
-    queryKey: ["maintenance-plans-all", currentCompanyId],
+    queryKey: queryKeys.maintenancePlans(currentCompanyId),
     queryFn: () =>
       db.MaintenancePlan.filter(
         { company_id: currentCompanyId },
@@ -107,24 +125,24 @@ export default function MaintenancePlansPage() {
   });
 
   const { data: contacts = [] } = useQuery({
-    queryKey: ["contacts-maint", currentCompanyId],
+    queryKey: queryKeys.contacts(currentCompanyId),
     queryFn: () => db.Contact.filter({ company_id: currentCompanyId }),
   });
 
   const { data: employees = [] } = useQuery({
-    queryKey: ["employees-maint"],
+    queryKey: queryKeys.employees(),
     queryFn: () => db.Employee.list(),
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: teams = [] } = useQuery({
-    queryKey: ["teams-maint"],
+    queryKey: queryKeys.teams(),
     queryFn: () => db.Team.list(),
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: allLocations = [] } = useQuery({
-    queryKey: ["locations-maint", currentCompanyId],
+    queryKey: queryKeys.locations(currentCompanyId),
     queryFn: () => db.Location.filter({ company_id: currentCompanyId } as Partial<Location>),
     staleTime: 5 * 60 * 1000,
   });
@@ -414,23 +432,46 @@ export default function MaintenancePlansPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() =>
+                                router.push(
+                                  `/contacts/${plan.contact_id}?tab=maintenance&editPlan=${plan.id}`
+                                )
+                              }
+                            >
                               <Pencil className="w-4 h-4 mr-2" />
                               Edit Plan
                             </DropdownMenuItem>
                             {plan.status === "active" && (
-                              <DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  statusMutation.mutate({
+                                    planId: plan.id,
+                                    status: "paused",
+                                  })
+                                }
+                              >
                                 <Pause className="w-4 h-4 mr-2" />
                                 Pause Plan
                               </DropdownMenuItem>
                             )}
                             {plan.status === "paused" && (
-                              <DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  statusMutation.mutate({
+                                    planId: plan.id,
+                                    status: "active",
+                                  })
+                                }
+                              >
                                 <Play className="w-4 h-4 mr-2" />
                                 Resume Plan
                               </DropdownMenuItem>
                             )}
-                            <DropdownMenuItem className="text-red-600">
+                            <DropdownMenuItem
+                              className="text-red-600"
+                              onClick={() => archiveMutation.mutate(plan.id)}
+                            >
                               <Trash2 className="w-4 h-4 mr-2" />
                               Archive Plan
                             </DropdownMenuItem>
@@ -464,33 +505,11 @@ export default function MaintenancePlansPage() {
           </CardContent>
         </Card>
 
-        {/* Create Plan Dialog (stub) */}
-        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Create Maintenance Plan</DialogTitle>
-              <DialogDescription>
-                Set up a new recurring maintenance plan for a client. Configure
-                services, frequency, and crew assignment.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="py-6 space-y-4">
-              <div className="rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800/40 p-4 text-sm text-amber-800 dark:text-amber-400">
-                The full plan creation wizard is coming soon. This will include
-                client selection, service configuration, scheduling, and pricing
-                setup.
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setShowCreateDialog(false)}
-              >
-                Close
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {/* Create Plan Wizard */}
+        <CreateMaintenancePlanDialog
+          open={showCreateDialog}
+          onOpenChange={setShowCreateDialog}
+        />
       </div>
     </div>
   );

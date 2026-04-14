@@ -53,7 +53,7 @@ export function classifyContact(
   const hasActiveProject = projects.some(
     (project) =>
       project.contact_id === contact.id &&
-      project.archived !== true &&
+      !project.archived_at &&
       (project.acceptance_state === "accepted" || !project.acceptance_state) &&
       !project.is_completed
   );

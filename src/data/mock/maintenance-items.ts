@@ -1,14 +1,15 @@
 import { MaintenanceItem } from "../types";
 
 export const mockMaintenanceItems: Omit<MaintenanceItem, "id" | "created_date" | "updated_date">[] = [
-  { name: "Lawn Mowing", description: "Standard lawn mowing with bagging or mulching", default_price: 60, category: "Lawn Care", unit: "per visit", company_id: "1" },
-  { name: "Edging", description: "Clean edging along sidewalks, driveways, and garden beds", default_price: 20, category: "Lawn Care", unit: "per visit", company_id: "1" },
-  { name: "Hedge Trimming", description: "Shape and trim hedges, shrubs, and ornamental bushes", default_price: 50, category: "Pruning", unit: "per visit", company_id: "1" },
-  { name: "Leaf Cleanup", description: "Blow, rake, and bag fallen leaves from lawn and beds", default_price: 85, category: "Seasonal", unit: "per visit", company_id: "1" },
-  { name: "Mulching", description: "Spread fresh mulch in garden beds (mulch material extra)", default_price: 120, category: "Beds & Gardens", unit: "per visit", company_id: "1" },
-  { name: "Weed Control", description: "Manual weed removal and pre-emergent application in beds", default_price: 35, category: "Beds & Gardens", unit: "per visit", company_id: "1" },
-  { name: "Fertilizing", description: "Lawn fertilizer application, seasonal blend", default_price: 75, category: "Lawn Care", unit: "per application", company_id: "1" },
-  { name: "Aeration", description: "Core aeration to reduce soil compaction and promote root growth", default_price: 250, category: "Lawn Care", unit: "per service", company_id: "1" },
-  { name: "Snow Removal", description: "Driveway and walkway snow clearing (salt/deicer extra)", default_price: 95, category: "Seasonal", unit: "per visit", company_id: "1" },
-  { name: "Gutter Cleaning", description: "Clear gutters and downspouts of debris", default_price: 120, category: "Seasonal", unit: "per service", company_id: "1" },
+  { name: "Lawn Mowing", description: "Standard residential lawn mowing, trim, and blow", pricing_type: "flat_rate", price_per_visit: 60, is_active: true, company_id: "1" },
+  { name: "Edging", description: "Sidewalk and driveway edging", pricing_type: "flat_rate", price_per_visit: 20, is_active: true, company_id: "1" },
+  { name: "Fertilizing", description: "Granular fertilizer application", pricing_type: "per_unit", unit_label: "1,000 sqft", price_per_unit: 15, avg_minutes_per_unit: 5, is_active: true, company_id: "1" },
+  { name: "Aeration", description: "Core aeration for soil health", pricing_type: "per_unit", unit_label: "1,000 sqft", price_per_unit: 25, avg_minutes_per_unit: 8, is_active: true, company_id: "1" },
+  { name: "Hedge Trimming", description: "Trim and shape hedges and shrubs", pricing_type: "flat_rate", price_per_visit: 50, is_active: true, company_id: "1" },
+  { name: "Leaf Cleanup", description: "Seasonal leaf removal and hauling", pricing_type: "variable", suggested_min: 50, suggested_max: 200, is_active: true, company_id: "1" },
+  { name: "Snow Removal", description: "Driveway and walkway snow clearing", pricing_type: "variable", suggested_min: 60, suggested_max: 150, is_active: true, company_id: "1" },
+  { name: "Gutter Cleaning", description: "Clean and flush gutters and downspouts", pricing_type: "flat_rate", price_per_visit: 120, is_active: true, company_id: "1" },
+  { name: "Mulching", description: "Deliver and spread mulch in garden beds", pricing_type: "per_unit", unit_label: "yard", price_per_unit: 40, avg_minutes_per_unit: 15, is_active: true, company_id: "1" },
+  { name: "Weed Control", description: "Pre-emergent and spot spray treatment", pricing_type: "flat_rate", price_per_visit: 35, is_active: false, company_id: "1" },
+  { name: "Window Cleaning", description: "Exterior window washing", pricing_type: "per_unit", unit_label: "window", price_per_unit: 8, avg_minutes_per_unit: 4, is_active: true, company_id: "1" },
 ];

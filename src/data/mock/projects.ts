@@ -112,7 +112,7 @@ export const mockProjects: Omit<Project, "id" | "created_date" | "updated_date">
     description: "Replace concrete driveway and front walkway with interlocking pavers. Herringbone pattern with contrasting border.",
     status: "archived",
     acceptance_state: "declined",
-    archived: true,
+    archived_at: "2026-01-05T00:00:00.000Z",
     total_amount: 22000,
     company_id: "1",
   },

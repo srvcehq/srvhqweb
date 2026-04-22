@@ -8,7 +8,8 @@ import { formatAssignedCrew, formatVisitCrew } from "@/hooks/use-employee-names"
 import { isoDate, addDays, startOfWeek, startOfMonth, formatTime12, todayStr } from "@/lib/format-helpers";
 import { queryKeys } from "@/lib/query-keys";
 import { toast } from "sonner";
-import type { MaintenanceVisit, Location, Employee } from "@/data/types";
+import type { MaintenanceVisit, Location, Employee, Payment } from "@/data/types";
+import { useSendCommunication } from "@/hooks/use-send-communication";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -106,6 +107,8 @@ export default function SchedulePage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { sendServicePayLink, sendCardCharged, isSending } = useSendCommunication();
+
   const activeEmployees = useMemo(
     () => employees.filter((e) => e.status !== "inactive"),
     [employees]
@@ -189,7 +192,7 @@ export default function SchedulePage() {
       const visit = visits.find((v) => v.id === visitId);
       await db.MaintenanceVisit.update(visitId, { status: "completed" });
       if (visit?.amountDue && visit.amountDue > 0) {
-        await db.Payment.create({
+        const payment = await db.Payment.create({
           company_id: currentCompanyId,
           contact_id: visit.contact_id,
           maintenance_visit_id: visit.id,
@@ -200,7 +203,9 @@ export default function SchedulePage() {
           description: `Maintenance visit — ${getName(visit.contact_id, visit.location_id)}`,
           due_date: todayStr(),
         });
+        return { visit, payment };
       }
+      return { visit, payment: null };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.maintenanceVisits(currentCompanyId) });
@@ -788,12 +793,24 @@ export default function SchedulePage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => {
-                          toast.success("Payment link sent.");
+                        disabled={isSending}
+                        onClick={async () => {
+                          if (!contact) return;
+                          // Find the payment created for this visit
+                          const payments = await db.Payment.filter({
+                            company_id: currentCompanyId,
+                            maintenance_visit_id: detailVisit.id,
+                          });
+                          const unpaid = payments.find((p) => p.status === "unpaid");
+                          if (unpaid) {
+                            await sendServicePayLink(contact, unpaid.amount, unpaid.id);
+                          } else {
+                            toast.error("No unpaid payment found for this visit.");
+                          }
                         }}
                       >
                         <Send className="w-3.5 h-3.5 mr-1.5" />
-                        Send Payment Link
+                        {isSending ? "Sending..." : "Send Pay Link"}
                       </Button>
                       <Button
                         variant="outline"
@@ -807,6 +824,35 @@ export default function SchedulePage() {
                       >
                         <Copy className="w-3.5 h-3.5 mr-1.5" />
                         Copy Link
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={isSending}
+                        onClick={async () => {
+                          if (!contact) return;
+                          // Mark the payment as succeeded (simulates card charge)
+                          const payments = await db.Payment.filter({
+                            company_id: currentCompanyId,
+                            maintenance_visit_id: detailVisit.id,
+                          });
+                          const unpaid = payments.find((p) => p.status === "unpaid");
+                          if (unpaid) {
+                            await db.Payment.update(unpaid.id, {
+                              status: "succeeded",
+                              payment_method: "card",
+                              paid_date: todayStr(),
+                            });
+                            await sendCardCharged(contact, unpaid.amount);
+                            queryClient.invalidateQueries({ queryKey: queryKeys.payments(currentCompanyId) });
+                            toast.success("Card charged. Confirmation sent.");
+                          } else {
+                            toast.error("No unpaid payment found for this visit.");
+                          }
+                        }}
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
+                        Charge Card
                       </Button>
                     </>
                   )}

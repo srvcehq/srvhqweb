@@ -17,6 +17,7 @@ import {
   canDeleteBid,
   type BidDisplayStatus,
 } from "@/lib/bid-project-sync";
+import { useSendCommunication } from "@/hooks/use-send-communication";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -168,6 +169,8 @@ export default function BidsPage() {
     queryFn: () => db.Project.filter({ company_id: currentCompanyId }),
   });
 
+  const { sendEstimate, resendEstimate, isSending } = useSendCommunication();
+
   const getContactName = (contactId: string) =>
     !contactId ? "No client linked" : findContactName(contacts, contactId);
 
@@ -212,6 +215,46 @@ export default function BidsPage() {
     } catch {
       toast.error("Failed to delete bid");
     }
+  };
+
+  const handleSendToClient = async (bid: (typeof allBids)[number]) => {
+    const contact = contacts.find((c) => c.id === bid.contact_id);
+    if (!contact) {
+      toast.error("No client linked to this bid.");
+      return;
+    }
+
+    // Mark bid as sent
+    await db.Bid.update(bid.id, {
+      status: "sent",
+      sent_at: new Date().toISOString(),
+    });
+
+    await sendEstimate(
+      contact,
+      bid.bid_total || 0,
+      bid.deposit_amount || 0,
+      bid.id,
+      bid.title
+    );
+
+    queryClient.invalidateQueries({ queryKey: ["bids"] });
+  };
+
+  const handleResendBid = async (bid: (typeof allBids)[number]) => {
+    const contact = contacts.find((c) => c.id === bid.contact_id);
+    if (!contact) {
+      toast.error("No client linked to this bid.");
+      return;
+    }
+
+    await resendEstimate(
+      contact,
+      bid.bid_total || 0,
+      bid.deposit_amount || 0,
+      bid.id,
+      bid.title
+    );
   };
 
   /* ---------------------------------------------------------------- */
@@ -563,9 +606,21 @@ export default function BidsPage() {
                                 Edit Bid
                               </DropdownMenuItem>
                               {bid.status === "draft" && (
-                                <DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled={isSending}
+                                  onClick={() => handleSendToClient(bid)}
+                                >
                                   <Send className="w-4 h-4 mr-2" />
                                   Send to Client
+                                </DropdownMenuItem>
+                              )}
+                              {bid.status === "sent" && (
+                                <DropdownMenuItem
+                                  disabled={isSending}
+                                  onClick={() => handleResendBid(bid)}
+                                >
+                                  <Send className="w-4 h-4 mr-2" />
+                                  Resend Estimate
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuSeparator />

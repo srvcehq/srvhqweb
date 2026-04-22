@@ -15,7 +15,8 @@ import { syncProjectScheduleBlocks } from "@/lib/sync-project-schedule-blocks";
 import { toast } from "sonner";
 import { todayStr, formatShortDateNoYear as formatShortDate } from "@/lib/format-helpers";
 import { queryKeys } from "@/lib/query-keys";
-import type { Project, Bid } from "@/data/types";
+import type { Project, Bid, Payment } from "@/data/types";
+import { useSendCommunication } from "@/hooks/use-send-communication";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -186,6 +187,15 @@ export default function ProjectsPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const {
+    sendDepositScheduled,
+    sendDepositApproved,
+    sendFinalPayment,
+    isSending,
+  } = useSendCommunication();
+
+  const getContact = (contactId: string) =>
+    contacts.find((c) => c.id === contactId);
   const getContactName = (contactId: string) =>
     findContactName(contacts, contactId);
   const getTeamName = (teamId?: string) =>
@@ -216,6 +226,44 @@ export default function ProjectsPage() {
     }
     invalidateAll();
     toast.success("Project accepted.");
+    setAcceptingProject(null);
+  };
+
+  const handleAcceptNoDateAndSendDeposit = async () => {
+    if (!acceptingProject) return;
+    const contact = getContact(acceptingProject.contact_id);
+    const bid = getBidForProject(acceptingProject);
+    const depositAmount = bid?.deposit_amount || 0;
+
+    await db.Project.update(acceptingProject.id, {
+      acceptance_state: "accepted",
+      status: "proposed",
+    });
+    if (bid) {
+      await db.Bid.update(bid.id, {
+        status: "accepted",
+        accepted_at: new Date().toISOString(),
+      });
+    }
+
+    // Create deposit payment if there's a deposit amount
+    if (depositAmount > 0 && contact) {
+      const payment = await db.Payment.create({
+        company_id: currentCompanyId,
+        contact_id: acceptingProject.contact_id,
+        project_id: acceptingProject.id,
+        bid_id: bid?.id,
+        type: "deposit",
+        amount: depositAmount,
+        status: "unpaid",
+        description: `Deposit — ${acceptingProject.title}`,
+        due_date: todayStr(),
+      });
+      await sendDepositApproved(contact, depositAmount, payment.id);
+    }
+
+    invalidateAll();
+    toast.success("Project accepted. Deposit link sent.");
     setAcceptingProject(null);
   };
 
@@ -266,8 +314,28 @@ export default function ProjectsPage() {
       selectedWorkDays: workDayKeys,
     });
 
+    // Create deposit payment and send communication
+    const schedContact = getContact(schedulingProject.contact_id);
+    const schedBid = getBidForProject(schedulingProject);
+    const schedDepositAmt = schedBid?.deposit_amount || 0;
+
+    if (schedDepositAmt > 0 && schedContact) {
+      const depositPayment = await db.Payment.create({
+        company_id: currentCompanyId,
+        contact_id: schedulingProject.contact_id,
+        project_id: schedulingProject.id,
+        bid_id: schedBid?.id,
+        type: "deposit",
+        amount: schedDepositAmt,
+        status: "unpaid",
+        description: `Deposit — ${schedulingProject.title}`,
+        due_date: todayStr(),
+      });
+      await sendDepositScheduled(schedContact, schedDepositAmt, depositPayment.id);
+    }
+
     invalidateAll();
-    toast.success("Project scheduled. Schedule blocks created.");
+    toast.success("Project scheduled. Deposit link sent.");
     setSchedulingProject(null);
   };
 
@@ -282,6 +350,8 @@ export default function ProjectsPage() {
 
     // Create final payment if project has a value
     const amount = completingProject.total_amount;
+    const contact = getContact(completingProject.contact_id);
+
     if (amount && amount > 0) {
       // Subtract deposits already paid
       const existingPayments = await db.Payment.filter({
@@ -294,7 +364,7 @@ export default function ProjectsPage() {
       const remaining = amount - paidSoFar;
 
       if (remaining > 0) {
-        await db.Payment.create({
+        const payment = await db.Payment.create({
           company_id: currentCompanyId,
           contact_id: completingProject.contact_id,
           project_id: completingProject.id,
@@ -304,8 +374,14 @@ export default function ProjectsPage() {
           description: `Final payment — ${completingProject.title}`,
           due_date: todayStr(),
         });
+
+        // Send final payment communication
+        if (contact) {
+          await sendFinalPayment(contact, remaining, payment.id);
+        }
+
         toast.success(
-          `Project completed. Final payment of $${remaining.toLocaleString()} created.`
+          `Project completed. Final payment of $${remaining.toLocaleString()} sent.`
         );
       } else {
         toast.success("Project completed. Fully paid.");
@@ -740,6 +816,26 @@ export default function ProjectsPage() {
                 </button>
               </div>
 
+              {/* Accept & Send Deposit shortcut */}
+              {(() => {
+                const bid = acceptingProject ? getBidForProject(acceptingProject) : null;
+                const dep = bid?.deposit_amount || 0;
+                if (dep <= 0) return null;
+                return (
+                  <button
+                    className="w-full rounded-xl border-2 border-border p-4 text-center hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors"
+                    disabled={isSending}
+                    onClick={handleAcceptNoDateAndSendDeposit}
+                  >
+                    <DollarSign className="w-8 h-8 mx-auto mb-2 text-emerald-600" />
+                    <p className="font-medium text-sm">Accept & Send Deposit Link</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      ${dep.toLocaleString()} deposit
+                    </p>
+                  </button>
+                );
+              })()}
+
               <div className="flex justify-end pt-2">
                 <Button
                   variant="outline"
@@ -930,9 +1026,10 @@ export default function ProjectsPage() {
                 </Button>
                 <Button
                   className="bg-gradient-to-r from-green-500 to-emerald-600"
+                  disabled={isSending}
                   onClick={handleMarkComplete}
                 >
-                  Complete & Create Payment
+                  {isSending ? "Completing..." : "Complete & Send Final Pay Link"}
                 </Button>
               </div>
             </div>

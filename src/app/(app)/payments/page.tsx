@@ -48,6 +48,7 @@ import {
 import type { Payment, Contact } from "@/data/types";
 import { formatShortDate, formatCurrency, todayStr } from "@/lib/format-helpers";
 import { queryKeys } from "@/lib/query-keys";
+import { useSendCommunication } from "@/hooks/use-send-communication";
 
 /* ------------------------------------------------------------------ */
 /* Config                                                              */
@@ -119,11 +120,21 @@ export default function PaymentsPage() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [clientFilter, setClientFilter] = useState("all");
 
+  // Communications
+  const {
+    sendInvoice,
+    resendPayLink,
+    isSending,
+  } = useSendCommunication();
+
   // Modals
   const [detailPayment, setDetailPayment] = useState<Payment | null>(null);
   const [markPaidPayment, setMarkPaidPayment] = useState<Payment | null>(null);
   const [markPaidMethod, setMarkPaidMethod] = useState("cash");
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
+  const [invoiceContactId, setInvoiceContactId] = useState("");
+  const [invoiceAmount, setInvoiceAmount] = useState("");
+  const [invoiceTitle, setInvoiceTitle] = useState("");
 
   // Data
   const { data: payments = [], isLoading } = useQuery({
@@ -273,8 +284,44 @@ export default function PaymentsPage() {
 
   const handleResendPayLink = (payment: Payment) => {
     const contact = getContact(payment.contact_id);
-    const method = contact?.phone ? "SMS" : contact?.email ? "email" : "notification";
-    toast.success(`Pay link resent via ${method}.`);
+    if (!contact) {
+      toast.error("Contact not found.");
+      return;
+    }
+    resendPayLink(contact, payment.amount, payment.id);
+  };
+
+  const handleSendInvoice = async () => {
+    const contact = contacts.find((c) => c.id === invoiceContactId);
+    if (!contact || !invoiceAmount) {
+      toast.error("Select a client and enter an amount.");
+      return;
+    }
+    const amount = parseFloat(invoiceAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error("Enter a valid amount.");
+      return;
+    }
+
+    // Create the payment record
+    const payment = await db.Payment.create({
+      company_id: currentCompanyId,
+      contact_id: invoiceContactId,
+      type: "invoice",
+      amount,
+      status: "unpaid",
+      description: invoiceTitle || "Invoice",
+      due_date: todayStr(),
+    });
+
+    // Send the communication
+    await sendInvoice(contact, amount, payment.id, invoiceTitle || "Invoice");
+
+    queryClient.invalidateQueries({ queryKey: queryKeys.payments(currentCompanyId) });
+    setShowInvoiceDialog(false);
+    setInvoiceContactId("");
+    setInvoiceAmount("");
+    setInvoiceTitle("");
   };
 
   return (
@@ -819,24 +866,68 @@ export default function PaymentsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Send Invoice Dialog (stub) */}
+      {/* Send Invoice Dialog */}
       <Dialog open={showInvoiceDialog} onOpenChange={setShowInvoiceDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Send Invoice</DialogTitle>
           </DialogHeader>
-          <div className="py-6">
-            <div className="rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800/40 p-4 text-sm text-amber-800 dark:text-amber-400">
-              Invoice sending requires Stripe Connect integration. Configure
-              your Stripe account in Settings to enable this feature.
+          <div className="space-y-4 mt-2">
+            <div className="space-y-2">
+              <Label>Client</Label>
+              <Select value={invoiceContactId} onValueChange={setInvoiceContactId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a client..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {contacts.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.first_name} {c.last_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Invoice Title</Label>
+              <input
+                type="text"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                placeholder="e.g. Lawn mowing — April"
+                value={invoiceTitle}
+                onChange={(e) => setInvoiceTitle(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Amount</Label>
+              <div className="relative">
+                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="flex h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  placeholder="0.00"
+                  value={invoiceAmount}
+                  onChange={(e) => setInvoiceAmount(e.target.value)}
+                />
+              </div>
             </div>
           </div>
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-3 pt-4 border-t">
             <Button
               variant="outline"
               onClick={() => setShowInvoiceDialog(false)}
             >
-              Close
+              Cancel
+            </Button>
+            <Button
+              className="bg-green-600 hover:bg-green-700 text-white"
+              disabled={isSending || !invoiceContactId || !invoiceAmount}
+              onClick={handleSendInvoice}
+            >
+              <Send className="w-4 h-4 mr-2" />
+              {isSending ? "Sending..." : "Send Invoice"}
             </Button>
           </div>
         </DialogContent>

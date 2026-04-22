@@ -16,7 +16,7 @@ import {
   LayoutGrid, User, MoreVertical, Pencil, Archive,
   Map, Copy, Wrench, Plus, Eye, DollarSign,
   ClipboardList, FileText, Building2, Trash2,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, Send,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -38,6 +38,7 @@ import EditLocationDialog from "@/components/contacts/edit-location-dialog";
 import EditMaintenancePlanDialog from "@/components/contacts/edit-maintenance-plan-dialog";
 import type { Contact, MaintenancePlan, MaintenanceVisit, Project, Payment, Location } from "@/data/types";
 import { classifyContact } from "@/lib/contact-classification";
+import { useSendCommunication } from "@/hooks/use-send-communication";
 
 export default function ContactDetailPage({
   params,
@@ -138,6 +139,7 @@ export default function ContactDetailPage({
     enabled: !!contactId && !!currentCompanyId,
   });
 
+  const { sendLoginLink, isSending: isSendingComm } = useSendCommunication();
   const isCommercial = contact?.contact_type === "commercial";
 
   // Auto-open edit plan dialog when navigated with ?editPlan= query param
@@ -439,6 +441,16 @@ export default function ContactDetailPage({
                 >
                   <Archive className="w-4 h-4 mr-2" />
                   <span>Archive Contact</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={isSendingComm || (!contact.phone && !contact.email)}
+                  onClick={() => {
+                    if (contact) sendLoginLink(contact);
+                  }}
+                  className="cursor-pointer"
+                >
+                  <Send className="w-4 h-4 mr-2 text-green-600" />
+                  <span>Send Client Login Link</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleOpenInMaps} className="cursor-pointer">

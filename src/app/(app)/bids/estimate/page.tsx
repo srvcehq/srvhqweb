@@ -1,12 +1,14 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/data/api";
 import { useCompany } from "@/providers/company-provider";
-import { type ItemsCatalog } from "@/data/types";
+import { type ItemsCatalog, type Contact } from "@/data/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useSendCommunication } from "@/hooks/use-send-communication";
+import { queryKeys } from "@/lib/query-keys";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,11 +24,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Calculator,
   Info,
   Minus,
   Package,
   Plus,
+  Send,
   ShoppingCart,
   Truck,
   Users,
@@ -150,6 +160,8 @@ function NumericInput({
 
 export default function LiveEstimatePage() {
   const { currentCompanyId } = useCompany();
+  const queryClient = useQueryClient();
+  const { sendEstimate, isSending } = useSendCommunication();
 
   const { data: catalogItems = [] } = useQuery({
     queryKey: ["items-catalog", currentCompanyId],
@@ -162,6 +174,11 @@ export default function LiveEstimatePage() {
       const all = await db.HardCost.filter({ company_id: currentCompanyId });
       return all.filter((hc) => hc.is_active);
     },
+  });
+
+  const { data: contacts = [] } = useQuery({
+    queryKey: queryKeys.contacts(currentCompanyId),
+    queryFn: () => db.Contact.filter({ company_id: currentCompanyId }),
   });
 
   /* ---- state ---- */
@@ -177,6 +194,9 @@ export default function LiveEstimatePage() {
   const [misc, setMisc] = useState(0);
   const [configItem, setConfigItem] = useState<ItemsCatalog | null>(null);
   const [configQty, setConfigQty] = useState(1);
+  const [showSendDialog, setShowSendDialog] = useState(false);
+  const [sendContactId, setSendContactId] = useState("");
+  const [sendTitle, setSendTitle] = useState("");
 
   /* ---- derived ---- */
   const availableItems = useMemo(() => {
@@ -685,23 +705,102 @@ export default function LiveEstimatePage() {
           </Card>
 
           {/* ======================================================== */}
-          {/* CREATE BID BUTTON                                        */}
+          {/* SAVE & SEND BUTTONS                                      */}
           {/* ======================================================== */}
-          <Button
-            className="w-full py-6 text-base font-semibold bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 shadow-lg"
-            onClick={() =>
-              toast.info(
-                "Estimate snapshot ready — bid creation coming soon.",
-              )
-            }
-          >
-            Create Bid from Estimate
-          </Button>
+          <div className="flex gap-3">
+            <Button
+              className="flex-1 py-6 text-base font-semibold bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 shadow-lg"
+              onClick={() => {
+                setShowSendDialog(true);
+                setSendContactId("");
+                setSendTitle("");
+              }}
+            >
+              <Send className="w-5 h-5 mr-2" />
+              Save Bid & Send to Client
+            </Button>
+          </div>
 
           <div className="h-4" />
         </div>
         </div>
       </div>
+
+      {/* ============================================================ */}
+      {/* SAVE & SEND DIALOG                                           */}
+      {/* ============================================================ */}
+      <Dialog open={showSendDialog} onOpenChange={setShowSendDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Save Bid & Send to Client</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="bg-muted rounded-lg p-4 text-center">
+              <p className="text-xs text-muted-foreground mb-1">Estimate Total</p>
+              <p className="text-2xl font-bold text-foreground">{fmt(customerPrice)}</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Client</Label>
+              <Select value={sendContactId} onValueChange={setSendContactId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a client..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {contacts.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.first_name} {c.last_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Project Name</Label>
+              <Input
+                placeholder="e.g. Backyard patio renovation"
+                value={sendTitle}
+                onChange={(e) => setSendTitle(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setShowSendDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!sendContactId || isSending || customerPrice <= 0}
+              className="bg-gradient-to-r from-green-500 to-emerald-600 text-white"
+              onClick={async () => {
+                const contact = contacts.find((c) => c.id === sendContactId);
+                if (!contact) return;
+
+                // Create the bid record
+                const bid = await db.Bid.create({
+                  company_id: currentCompanyId,
+                  contact_id: sendContactId,
+                  title: sendTitle || "Live Estimate",
+                  status: "sent",
+                  bid_total: customerPrice,
+                  direct_cost_subtotal: itemsTotal,
+                  labor_estimate_total: laborTotal,
+                  bid_mode: "quick",
+                  sent_at: new Date().toISOString(),
+                });
+
+                // Send the communication
+                await sendEstimate(contact, customerPrice, 0, bid.id, sendTitle || "Live Estimate");
+
+                queryClient.invalidateQueries({ queryKey: queryKeys.bids(currentCompanyId) });
+                setShowSendDialog(false);
+                toast.success("Bid saved and sent to client.");
+              }}
+            >
+              <Send className="w-4 h-4 mr-2" />
+              {isSending ? "Sending..." : "Send Estimate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ============================================================ */}
       {/* ITEM CONFIGURATION MODAL                                     */}

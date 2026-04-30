@@ -114,7 +114,18 @@ export const mockRoutePlans: Omit<RoutePlan, "id" | "created_date" | "updated_da
   },
 ];
 
-export const mockDoorToDoorPins: Omit<DoorToDoorPin, "id" | "created_date" | "updated_date">[] = [];
+export const mockDoorToDoorPins: Omit<DoorToDoorPin, "id" | "created_date" | "updated_date">[] = [
+  { address: "1450 Larimer St, Denver, CO 80202", lat: 39.7480, lng: -104.9994, status: "interested", notes: "Big front yard, mentioned interest in sod replacement", visited_at: "2026-04-28T15:30:00Z", company_id: "1" },
+  { address: "2100 Welton St, Denver, CO 80205", lat: 39.7508, lng: -104.9803, status: "made_sale", notes: "Signed up for monthly maintenance plan", visited_at: "2026-04-28T16:15:00Z", company_id: "1" },
+  { address: "880 16th St, Denver, CO 80202", lat: 39.7470, lng: -105.0010, status: "follow_up", notes: "Wants quote next week, asked about pavers", visited_at: "2026-04-29T10:00:00Z", company_id: "1" },
+  { address: "3201 E Colfax Ave, Denver, CO 80206", lat: 39.7402, lng: -104.9499, status: "no_answer", visited_at: "2026-04-29T14:20:00Z", company_id: "1" },
+  { address: "555 17th St, Denver, CO 80202", lat: 39.7461, lng: -104.9892, status: "not_interested", notes: "Has existing landscaper", visited_at: "2026-04-29T11:45:00Z", company_id: "1" },
+  { address: "4400 W 29th Ave, Denver, CO 80212", lat: 39.7575, lng: -105.0440, status: "interested", notes: "Considering full backyard renovation", visited_at: "2026-04-29T16:00:00Z", company_id: "1" },
+  { address: "990 S Broadway, Denver, CO 80209", lat: 39.7050, lng: -104.9870, status: "do_not_knock", notes: "Owner asked not to be contacted", visited_at: "2026-04-30T09:15:00Z", company_id: "1" },
+  { address: "1801 Wynkoop St, Denver, CO 80202", lat: 39.7530, lng: -105.0000, status: "maintenance_customer", notes: "Existing weekly service customer", company_id: "1" },
+  { address: "2750 N Speer Blvd, Denver, CO 80211", lat: 39.7670, lng: -105.0220, status: "follow_up", notes: "Out of town until next month, will call", visited_at: "2026-04-30T12:30:00Z", company_id: "1" },
+  { address: "1100 S Colorado Blvd, Denver, CO 80246", lat: 39.7050, lng: -104.9410, status: "made_sale", notes: "Spring cleanup + ongoing mow", visited_at: "2026-04-27T13:00:00Z", company_id: "1" },
+];
 
 export const mockRolePermissions: Omit<RolePermission, "id" | "created_date" | "updated_date">[] = [
   {

@@ -572,7 +572,7 @@ export default function DoorToDoorPage() {
   }
 
   return (
-    <div className="h-full relative overflow-hidden">
+    <div className="h-[calc(100dvh-65px)] min-h-[500px] relative overflow-hidden">
       <APIProvider apiKey={apiKey}>
         <DoorToDoorMapContent />
       </APIProvider>

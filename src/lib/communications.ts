@@ -36,6 +36,8 @@ export interface SendCommunicationParams {
   relatedId?: string;
   /** linked entity type */
   relatedType?: Communication["related_type"];
+  /** override pay link with a real Stripe Checkout URL */
+  payUrl?: string;
 }
 
 interface TemplateResult {
@@ -49,7 +51,8 @@ interface TemplateResult {
 /* Link generators                                                     */
 /* ------------------------------------------------------------------ */
 
-function paymentLink(relatedId?: string): string {
+function paymentLink(relatedId?: string, override?: string): string {
+  if (override) return override;
   return `https://pay.terraflow.com/p/${relatedId || "unknown"}`;
 }
 
@@ -83,7 +86,9 @@ function buildTemplate(params: SendCommunicationParams): TemplateResult {
     depositAmount,
     title,
     relatedId,
+    payUrl,
   } = params;
+  const link = (id?: string) => paymentLink(id, payUrl);
 
   const customerName = `${contact.first_name} ${contact.last_name}`.trim() || "there";
   const amt = fmtMoney(amount);
@@ -94,9 +99,9 @@ function buildTemplate(params: SendCommunicationParams): TemplateResult {
     /* ---- Payments: Send Invoice ---- */
     case "send_invoice":
       return {
-        sms: `${companyName}: Your invoice for ${amt} is ready. Pay here: ${paymentLink(relatedId)}`,
+        sms: `${companyName}: Your invoice for ${amt} is ready. Pay here: ${link(relatedId)}`,
         emailSubject: "Your Invoice is Ready",
-        emailBody: `Hi ${customerName},\n\nYour invoice for ${title || "services rendered"} is ready.\n\nAmount due: ${amt}\n\nYou can pay securely here:\n${paymentLink(relatedId)}\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nYour invoice for ${title || "services rendered"} is ready.\n\nAmount due: ${amt}\n\nYou can pay securely here:\n${link(relatedId)}\n\nThanks,\n${companyName}`,
         channel: "invoice",
       };
 
@@ -112,27 +117,27 @@ function buildTemplate(params: SendCommunicationParams): TemplateResult {
     /* ---- Projects: Schedule & Send Deposit ---- */
     case "send_deposit_scheduled":
       return {
-        sms: `${companyName}: Your project is scheduled. A deposit of ${dep} is due to secure your spot. Pay here: ${paymentLink(relatedId)}`,
+        sms: `${companyName}: Your project is scheduled. A deposit of ${dep} is due to secure your spot. Pay here: ${link(relatedId)}`,
         emailSubject: "Project Scheduled \u2013 Deposit Required",
-        emailBody: `Hi ${customerName},\n\nYour project has been scheduled.\n\nDeposit due: ${dep}\n\nPlease complete your deposit here:\n${paymentLink(relatedId)}\n\nWe look forward to getting started.\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nYour project has been scheduled.\n\nDeposit due: ${dep}\n\nPlease complete your deposit here:\n${link(relatedId)}\n\nWe look forward to getting started.\n\nThanks,\n${companyName}`,
         channel: "payment_link",
       };
 
     /* ---- Projects: Accept (no date) & Send Deposit ---- */
     case "send_deposit_approved":
       return {
-        sms: `${companyName}: Your project has been approved. A deposit of ${dep} is required to get started. Pay here: ${paymentLink(relatedId)}`,
+        sms: `${companyName}: Your project has been approved. A deposit of ${dep} is required to get started. Pay here: ${link(relatedId)}`,
         emailSubject: "Project Approved \u2013 Deposit Required",
-        emailBody: `Hi ${customerName},\n\nYour project has been approved.\n\nDeposit due: ${dep}\n\nPlease complete your deposit here:\n${paymentLink(relatedId)}\n\nWe'll schedule your project once the deposit is received.\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nYour project has been approved.\n\nDeposit due: ${dep}\n\nPlease complete your deposit here:\n${link(relatedId)}\n\nWe'll schedule your project once the deposit is received.\n\nThanks,\n${companyName}`,
         channel: "payment_link",
       };
 
     /* ---- Projects: Complete & Send Final Pay ---- */
     case "send_final_payment":
       return {
-        sms: `${companyName}: Your project is complete. Your final balance of ${amt} is ready. Pay here: ${paymentLink(relatedId)}`,
+        sms: `${companyName}: Your project is complete. Your final balance of ${amt} is ready. Pay here: ${link(relatedId)}`,
         emailSubject: "Project Complete \u2013 Final Payment Due",
-        emailBody: `Hi ${customerName},\n\nYour project has been completed.\n\nFinal balance due: ${amt}\n\nYou can complete your payment here:\n${paymentLink(relatedId)}\n\nThank you for your business.\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nYour project has been completed.\n\nFinal balance due: ${amt}\n\nYou can complete your payment here:\n${link(relatedId)}\n\nThank you for your business.\n\nThanks,\n${companyName}`,
         channel: "payment_link",
       };
 
@@ -148,9 +153,9 @@ function buildTemplate(params: SendCommunicationParams): TemplateResult {
     /* ---- Schedule: Service Complete — Send Pay Link ---- */
     case "send_service_pay_link":
       return {
-        sms: `${companyName}: Your service is complete. Your balance of ${amt} is ready. Pay here: ${paymentLink(relatedId)}`,
+        sms: `${companyName}: Your service is complete. Your balance of ${amt} is ready. Pay here: ${link(relatedId)}`,
         emailSubject: "Service Complete \u2013 Payment Due",
-        emailBody: `Hi ${customerName},\n\nYour service has been completed.\n\nAmount due: ${amt}\n\nYou can complete your payment here:\n${paymentLink(relatedId)}\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nYour service has been completed.\n\nAmount due: ${amt}\n\nYou can complete your payment here:\n${link(relatedId)}\n\nThanks,\n${companyName}`,
         channel: "payment_link",
       };
 
@@ -166,17 +171,17 @@ function buildTemplate(params: SendCommunicationParams): TemplateResult {
     /* ---- Resend variants ---- */
     case "resend_pay_link":
       return {
-        sms: `${companyName}: Reminder — your balance of ${amt} is ready. Pay here: ${paymentLink(relatedId)}`,
+        sms: `${companyName}: Reminder — your balance of ${amt} is ready. Pay here: ${link(relatedId)}`,
         emailSubject: "Payment Reminder",
-        emailBody: `Hi ${customerName},\n\nThis is a reminder that you have an outstanding balance.\n\nAmount due: ${amt}\n\nYou can pay here:\n${paymentLink(relatedId)}\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nThis is a reminder that you have an outstanding balance.\n\nAmount due: ${amt}\n\nYou can pay here:\n${link(relatedId)}\n\nThanks,\n${companyName}`,
         channel: "payment_link",
       };
 
     case "resend_deposit_link":
       return {
-        sms: `${companyName}: Reminder — a deposit of ${dep} is required. Pay here: ${paymentLink(relatedId)}`,
+        sms: `${companyName}: Reminder — a deposit of ${dep} is required. Pay here: ${link(relatedId)}`,
         emailSubject: "Deposit Reminder",
-        emailBody: `Hi ${customerName},\n\nThis is a reminder that a deposit is required for your project.\n\nDeposit due: ${dep}\n\nPlease complete your deposit here:\n${paymentLink(relatedId)}\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nThis is a reminder that a deposit is required for your project.\n\nDeposit due: ${dep}\n\nPlease complete your deposit here:\n${link(relatedId)}\n\nThanks,\n${companyName}`,
         channel: "payment_link",
       };
 

@@ -55,6 +55,7 @@ export function useSendCommunication() {
       relatedId?: string;
       relatedType?: Communication["related_type"];
       method?: SendMethod;
+      payUrl?: string;
     } = {}
   ) {
     const method = opts.method ?? detectSendMethod(contact);
@@ -69,6 +70,7 @@ export function useSendCommunication() {
       title: opts.title,
       relatedId: opts.relatedId,
       relatedType: opts.relatedType,
+      payUrl: opts.payUrl,
     });
   }
 
@@ -81,13 +83,15 @@ export function useSendCommunication() {
     contact: Contact,
     amount: number,
     paymentId: string,
-    invoiceTitle?: string
+    invoiceTitle?: string,
+    payUrl?: string
   ) {
     return send("send_invoice", contact, {
       amount,
       title: invoiceTitle,
       relatedId: paymentId,
       relatedType: "invoice",
+      payUrl,
     });
   }
 
@@ -179,12 +183,14 @@ export function useSendCommunication() {
   function resendPayLink(
     contact: Contact,
     amount: number,
-    paymentId: string
+    paymentId: string,
+    payUrl?: string
   ) {
     return send("resend_pay_link", contact, {
       amount,
       relatedId: paymentId,
       relatedType: "invoice",
+      payUrl,
     });
   }
 

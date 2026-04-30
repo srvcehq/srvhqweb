@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { stripe } from "@/lib/stripe";
 import { publicEnv } from "@/lib/env";
+import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
+
+const CONNECT_CAPACITY = 3;
+const CONNECT_WINDOW_MS = 60_000;
 
 const bodySchema = z.object({
   companyId: z.string().min(1),
@@ -13,6 +17,9 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const limit = checkRateLimit(`connect:${getClientIp(request)}`, CONNECT_CAPACITY, CONNECT_WINDOW_MS);
+  if (!limit.ok) return rateLimitResponse(limit);
+
   let parsed;
   try {
     parsed = bodySchema.parse(await request.json());

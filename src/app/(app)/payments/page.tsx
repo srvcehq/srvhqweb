@@ -49,6 +49,7 @@ import type { Payment, Contact } from "@/data/types";
 import { formatShortDate, formatCurrency, todayStr } from "@/lib/format-helpers";
 import { queryKeys } from "@/lib/query-keys";
 import { useSendCommunication } from "@/hooks/use-send-communication";
+import { createCheckoutSession, dollarsToCents, StripeNotConnectedError } from "@/lib/checkout-client";
 
 /* ------------------------------------------------------------------ */
 /* Config                                                              */
@@ -164,6 +165,29 @@ export default function PaymentsPage() {
       db.MaintenancePlan.filter({ company_id: currentCompanyId }),
   });
 
+  const { data: companySettings = [] } = useQuery({
+    queryKey: ["company-settings", currentCompanyId],
+    queryFn: () => db.CompanySetting.filter({ company_id: currentCompanyId }),
+    staleTime: 10 * 60 * 1000,
+  });
+  const stripeAccountId = companySettings[0]?.stripe_connect_account_id;
+  const stripeStatus = companySettings[0]?.stripe_connect_status;
+  const stripeReady = stripeStatus === "active" && Boolean(stripeAccountId);
+
+  async function ensureCheckoutUrl(payment: Payment): Promise<string> {
+    if (!stripeReady) throw new StripeNotConnectedError();
+    const contact = getContact(payment.contact_id);
+    const result = await createCheckoutSession({
+      connectedAccountId: stripeAccountId!,
+      amountCents: dollarsToCents(payment.amount),
+      description: payment.description || "TerraFlow service",
+      paymentId: payment.id,
+      customerEmail: contact?.email,
+      contactId: payment.contact_id,
+    });
+    return result.url;
+  }
+
   // Mark as paid mutation
   const markPaidMutation = useMutation({
     mutationFn: (data: { paymentId: string; method: string }) =>
@@ -276,19 +300,28 @@ export default function PaymentsPage() {
   }, [payments, statusFilter, typeFilter, clientFilter]);
 
   // Actions
-  const handleCopyPayLink = (payment: Payment) => {
-    const link = `https://pay.terraflow.com/p/${payment.id}`;
-    navigator.clipboard.writeText(link);
-    toast.success("Pay link copied to clipboard.");
+  const handleCopyPayLink = async (payment: Payment) => {
+    try {
+      const url = await ensureCheckoutUrl(payment);
+      await navigator.clipboard.writeText(url);
+      toast.success("Pay link copied to clipboard.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create pay link.");
+    }
   };
 
-  const handleResendPayLink = (payment: Payment) => {
+  const handleResendPayLink = async (payment: Payment) => {
     const contact = getContact(payment.contact_id);
     if (!contact) {
       toast.error("Contact not found.");
       return;
     }
-    resendPayLink(contact, payment.amount, payment.id);
+    try {
+      const payUrl = await ensureCheckoutUrl(payment);
+      await resendPayLink(contact, payment.amount, payment.id, payUrl);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to send pay link.");
+    }
   };
 
   const handleSendInvoice = async () => {
@@ -302,8 +335,11 @@ export default function PaymentsPage() {
       toast.error("Enter a valid amount.");
       return;
     }
+    if (!stripeReady) {
+      toast.error("Connect your Stripe account in Settings before sending invoices.");
+      return;
+    }
 
-    // Create the payment record
     const payment = await db.Payment.create({
       company_id: currentCompanyId,
       contact_id: invoiceContactId,
@@ -314,8 +350,15 @@ export default function PaymentsPage() {
       due_date: todayStr(),
     });
 
-    // Send the communication
-    await sendInvoice(contact, amount, payment.id, invoiceTitle || "Invoice");
+    let payUrl: string | undefined;
+    try {
+      payUrl = await ensureCheckoutUrl(payment);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create Stripe link.");
+      return;
+    }
+
+    await sendInvoice(contact, amount, payment.id, invoiceTitle || "Invoice", payUrl);
 
     queryClient.invalidateQueries({ queryKey: queryKeys.payments(currentCompanyId) });
     setShowInvoiceDialog(false);

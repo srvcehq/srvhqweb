@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { calculatePlatformFee, stripe } from "@/lib/stripe";
 import { publicEnv } from "@/lib/env";
+import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
+
+const CHECKOUT_CAPACITY = 10;
+const CHECKOUT_WINDOW_MS = 60_000;
 
 const bodySchema = z.object({
   connectedAccountId: z.string().startsWith("acct_"),
@@ -17,6 +21,9 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const limit = checkRateLimit(`checkout:${getClientIp(request)}`, CHECKOUT_CAPACITY, CHECKOUT_WINDOW_MS);
+  if (!limit.ok) return rateLimitResponse(limit);
+
   let parsed;
   try {
     parsed = bodySchema.parse(await request.json());

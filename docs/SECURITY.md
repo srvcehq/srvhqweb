@@ -96,6 +96,49 @@ Google Cloud Console → APIs & Services → Credentials → click your key:
 ### Anything else
 - If you suspect a `.env.local` was committed: `git log -- .env.local` to confirm, then **rotate every key in that file** even if you immediately deleted the commit. Once it's in any git history, assume it was scraped.
 
+## Rate limiting
+
+Server-side rate limits live in `src/lib/rate-limit.ts` (in-memory token bucket). Current limits:
+
+| Route | Limit | Reason |
+|---|---|---|
+| `POST /api/stripe/checkout` | 10 / min / IP | Each call creates a Stripe Checkout Session |
+| `POST /api/stripe/connect` | 3 / min / IP | Each call creates a Stripe Express account — tightly capped |
+| `POST /api/stripe/webhook` | **Not rate-limited** | Stripe needs retries; signature verification is the gate |
+
+Limit exceeded → returns `429 Too Many Requests` with a `Retry-After` header.
+
+### Caveat: in-memory backend
+
+The current implementation is per-process, so **each Netlify serverless instance has its own counter**. A determined attacker hitting many cold starts could exceed the per-IP cap in aggregate. This is fine pre-launch but should be upgraded before public traffic.
+
+### Upgrading to distributed rate limiting (Upstash Redis)
+
+When ready, swap the backend in `src/lib/rate-limit.ts`:
+
+```bash
+npm install @upstash/ratelimit @upstash/redis
+```
+
+Add env vars (Upstash dashboard → Console → REST API):
+```
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+```
+
+Replace `checkRateLimit` body with `@upstash/ratelimit`'s `limit()` call, leave the route handlers untouched. Free tier covers 10K requests/day — more than enough for early traffic.
+
+## Google Maps quota controls
+
+Maps API requests come from the browser → Google directly, so there's no server hop where we can rate-limit. The actual protection lives in Google Cloud Console:
+
+1. **Billing → Budgets & alerts**: hard cap (e.g., $25/mo) with alerts at 50/90/100% — *the most important step*
+2. **APIs & Services → Quotas**: per-API request quotas, e.g., "Maps JavaScript API requests per minute per user" — set to a sane upper bound (1,000/min/user is generous)
+3. **API key restrictions** (covered above): HTTP referrer + API allowlist
+4. **Client-side throttling**: `/client-map` paces geocoder calls at ~16/sec to stay polite to Google's QPS limits
+
+If you see unexpected usage spikes, check **APIs & Services → Metrics** to see which API + which referrer is responsible.
+
 ## Defense-in-depth checklist
 
 - [x] `.env*` in `.gitignore`
@@ -103,7 +146,8 @@ Google Cloud Console → APIs & Services → Credentials → click your key:
 - [x] `getServerEnv()` throws if called from browser
 - [x] Stripe webhook verifies signature — unsigned requests return 400
 - [x] Stripe routes use Zod-validated input (no raw body trust)
-- [ ] Rate limit Stripe routes (Netlify Edge / upstash) — TODO before public launch
+- [x] Rate limit on `/api/stripe/checkout` and `/api/stripe/connect` (in-memory)
+- [ ] Upgrade rate limit backend to Upstash Redis before public launch
 - [ ] Sentry / error tracking on webhook failures — TODO
 - [ ] Audit log table in DB once persistence is wired
 

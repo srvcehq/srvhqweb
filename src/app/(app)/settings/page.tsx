@@ -167,7 +167,7 @@ export default function SettingsPage() {
           </TabsContent>
 
           <TabsContent value="stripe">
-            <StripeTab settings={settings} />
+            <StripeTab settings={settings} onSettingsChange={setSettings} />
           </TabsContent>
         </Tabs>
       </div>

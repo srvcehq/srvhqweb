@@ -6,17 +6,30 @@ import type { Communication, Contact, CompanySetting } from "@/data/types";
 /* ------------------------------------------------------------------ */
 
 export type CommunicationAction =
+  // Send (initial)
   | "send_invoice"
   | "send_estimate"
   | "send_deposit_scheduled"
   | "send_deposit_approved"
   | "send_final_payment"
   | "send_login_link"
+  | "send_invite_link"
   | "send_service_pay_link"
   | "send_card_charged"
+  // Resend
   | "resend_pay_link"
   | "resend_deposit_link"
-  | "resend_estimate";
+  | "resend_estimate"
+  | "resend_final_payment"
+  | "resend_invite_link"
+  // Reminders
+  | "payment_reminder"
+  | "deposit_reminder"
+  | "final_payment_reminder"
+  // System events (auto-fired by webhooks / triggers)
+  | "payment_failed"
+  | "charge_refunded"
+  | "ach_failed";
 
 export type SendMethod = "sms" | "email" | "both";
 
@@ -193,6 +206,81 @@ function buildTemplate(params: SendCommunicationParams): TemplateResult {
         channel: "estimate",
       };
 
+    case "resend_final_payment":
+      return {
+        sms: `${companyName}: Reminder — your final balance of ${amt} is ready. Pay here: ${link(relatedId)}`,
+        emailSubject: "Final Payment Reminder",
+        emailBody: `Hi ${customerName},\n\nThis is a reminder that your final payment is due.\n\nFinal balance: ${amt}\n\nComplete payment here:\n${link(relatedId)}\n\nThanks,\n${companyName}`,
+        channel: "payment_link",
+      };
+
+    /* ---- Invites ---- */
+    case "send_invite_link":
+      return {
+        sms: `${companyName}: Welcome! Set up your client portal here: ${loginLink(contact.id)}`,
+        emailSubject: `Welcome to ${companyName}`,
+        emailBody: `Hi ${customerName},\n\nWelcome — we've set up your client portal.\n\nClick below to complete your account setup. You'll be able to view your projects, payments, and history.\n\n${loginLink(contact.id)}\n\nIf you have any questions, just reply to this email.\n\nThanks,\n${companyName}`,
+        channel: "system",
+      };
+
+    case "resend_invite_link":
+      return {
+        sms: `${companyName}: Your portal invite is still active: ${loginLink(contact.id)}`,
+        emailSubject: `Your ${companyName} portal invite`,
+        emailBody: `Hi ${customerName},\n\nJust a reminder that your client portal invite is still active. Click below to set up your account:\n\n${loginLink(contact.id)}\n\nThanks,\n${companyName}`,
+        channel: "system",
+      };
+
+    /* ---- Reminders ---- */
+    case "payment_reminder":
+      return {
+        sms: `${companyName}: Friendly reminder — your balance of ${amt} is still outstanding. Pay here: ${link(relatedId)}`,
+        emailSubject: "Friendly Payment Reminder",
+        emailBody: `Hi ${customerName},\n\nWe wanted to send a friendly reminder that your balance is still outstanding.\n\nAmount due: ${amt}\n\nYou can pay here:\n${link(relatedId)}\n\nIf you've already paid, please disregard this message.\n\nThanks,\n${companyName}`,
+        channel: "payment_link",
+      };
+
+    case "deposit_reminder":
+      return {
+        sms: `${companyName}: Friendly reminder — your deposit of ${dep} is needed to schedule your project. Pay here: ${link(relatedId)}`,
+        emailSubject: "Friendly Deposit Reminder",
+        emailBody: `Hi ${customerName},\n\nFriendly reminder that we need your deposit to schedule your project.\n\nDeposit due: ${dep}\n\nComplete your deposit here:\n${link(relatedId)}\n\nThanks,\n${companyName}`,
+        channel: "payment_link",
+      };
+
+    case "final_payment_reminder":
+      return {
+        sms: `${companyName}: Friendly reminder — your final payment of ${amt} is due. Pay here: ${link(relatedId)}`,
+        emailSubject: "Friendly Final Payment Reminder",
+        emailBody: `Hi ${customerName},\n\nFriendly reminder that your final balance is still due.\n\nAmount due: ${amt}\n\nComplete payment here:\n${link(relatedId)}\n\nThanks,\n${companyName}`,
+        channel: "payment_link",
+      };
+
+    /* ---- System events (auto-fired by webhooks) ---- */
+    case "payment_failed":
+      return {
+        sms: `${companyName}: Your payment of ${amt} could not be processed. Please update your card and try again: ${link(relatedId)}`,
+        emailSubject: "Payment Could Not Be Processed",
+        emailBody: `Hi ${customerName},\n\nWe weren't able to process your payment of ${amt}. This usually means the card was declined or has expired.\n\nYou can try again with a different card here:\n${link(relatedId)}\n\nIf you continue to have trouble, just reply to this email.\n\nThanks,\n${companyName}`,
+        channel: "payment_link",
+      };
+
+    case "ach_failed":
+      return {
+        sms: `${companyName}: Your bank transfer for ${amt} failed. Please retry payment: ${link(relatedId)}`,
+        emailSubject: "Bank Transfer Failed",
+        emailBody: `Hi ${customerName},\n\nYour bank transfer of ${amt} did not go through. This sometimes happens with insufficient funds or account issues.\n\nYou can retry the payment here:\n${link(relatedId)}\n\nIf you have questions, please reply to this email.\n\nThanks,\n${companyName}`,
+        channel: "payment_link",
+      };
+
+    case "charge_refunded":
+      return {
+        sms: `${companyName}: A refund of ${amt} has been issued to your original payment method. It may take 5–10 business days to appear.`,
+        emailSubject: "Refund Issued",
+        emailBody: `Hi ${customerName},\n\nA refund of ${amt} has been issued to your original payment method.\n\nDepending on your bank, this may take 5–10 business days to appear on your statement.\n\nIf you have any questions, please reply to this email.\n\nThanks,\n${companyName}`,
+        channel: "system",
+      };
+
     default:
       return {
         sms: `${companyName}: You have a new notification. Log in to view: ${loginLink(contact.id)}`,
@@ -265,14 +353,38 @@ export async function sendCommunication(
     });
   }
 
-  // TODO: Call /api/communications/send for real delivery
-  // await fetch("/api/communications/send", {
-  //   method: "POST",
-  //   body: JSON.stringify({
-  //     sms: actualSendSms ? { to: contact.phone, body: template.sms } : null,
-  //     email: actualSendEmail ? { to: contact.email, subject: template.emailSubject, body: template.emailBody } : null,
-  //   }),
-  // });
+  // Fire actual delivery via Postmark + Twilio. Falls back to console.log
+  // server-side if env vars aren't set, so this is safe in dev.
+  try {
+    const payload: { sms?: { to: string; body: string }; email?: { to: string; subject: string; body: string }; metadata?: Record<string, string> } = {};
+    if (actualSendSms && contact.phone) {
+      payload.sms = { to: contact.phone, body: template.sms };
+    }
+    if (actualSendEmail && contact.email) {
+      payload.email = { to: contact.email, subject: template.emailSubject, body: template.emailBody };
+    }
+    if (payload.sms || payload.email) {
+      const meta: Record<string, string> = {
+        action: params.action,
+        company_id: companyId,
+        contact_id: contact.id,
+      };
+      if (params.relatedId) meta.related_id = params.relatedId;
+      if (params.relatedType) meta.related_type = params.relatedType;
+      payload.metadata = meta;
+
+      const response = await fetch("/api/communications/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok && response.status !== 429) {
+        console.warn("[sendCommunication] delivery API returned non-OK:", response.status);
+      }
+    }
+  } catch (err) {
+    console.warn("[sendCommunication] delivery API call failed:", err);
+  }
 
   return result;
 }

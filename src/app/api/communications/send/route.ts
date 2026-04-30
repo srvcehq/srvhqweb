@@ -1,60 +1,83 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { sendEmail } from "@/lib/email";
+import { sendSms } from "@/lib/sms";
+import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 
-/**
- * POST /api/communications/send
- *
- * Sends SMS and/or email to a contact.
- *
- * When Twilio and an email provider (SendGrid, Google, etc.) are
- * configured, this route will call their APIs. Until then it logs
- * the request and returns success so the frontend flow works end-to-end.
- *
- * Expected body:
- * {
- *   sms?: { to: string; body: string }
- *   email?: { to: string; subject: string; body: string }
- * }
- */
+export const runtime = "nodejs";
+
+const COMMS_CAPACITY = 30;
+const COMMS_WINDOW_MS = 60_000;
+
+const bodySchema = z
+  .object({
+    sms: z
+      .object({
+        to: z.string().min(1),
+        body: z.string().min(1).max(1600),
+      })
+      .optional(),
+    email: z
+      .object({
+        to: z.string().email(),
+        subject: z.string().min(1).max(998),
+        body: z.string().min(1),
+        htmlBody: z.string().optional(),
+        replyTo: z.string().email().optional(),
+        tag: z.string().max(64).optional(),
+      })
+      .optional(),
+    metadata: z.record(z.string(), z.string()).optional(),
+  })
+  .refine((v) => v.sms || v.email, { message: "Provide at least one of sms or email" });
+
 export async function POST(request: NextRequest) {
+  const limit = checkRateLimit(`comms:${getClientIp(request)}`, COMMS_CAPACITY, COMMS_WINDOW_MS);
+  if (!limit.ok) return rateLimitResponse(limit);
+
+  let parsed;
   try {
-    const body = await request.json();
-
-    const results: { sms?: string; email?: string } = {};
-
-    if (body.sms?.to && body.sms?.body) {
-      // TODO: Twilio integration
-      // const twilio = require("twilio")(process.env.TWILIO_SID, process.env.TWILIO_AUTH);
-      // await twilio.messages.create({
-      //   to: body.sms.to,
-      //   from: process.env.TWILIO_FROM_NUMBER,
-      //   body: body.sms.body,
-      // });
-
-      console.log("[SMS] To:", body.sms.to, "| Body:", body.sms.body);
-      results.sms = "sent";
-    }
-
-    if (body.email?.to && body.email?.body) {
-      // TODO: Email provider integration (SendGrid / Google / Resend / etc.)
-      // const sgMail = require("@sendgrid/mail");
-      // sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-      // await sgMail.send({
-      //   to: body.email.to,
-      //   from: process.env.FROM_EMAIL,
-      //   subject: body.email.subject,
-      //   text: body.email.body,
-      // });
-
-      console.log("[Email] To:", body.email.to, "| Subject:", body.email.subject);
-      results.email = "sent";
-    }
-
-    return NextResponse.json({ success: true, results });
-  } catch (error) {
-    console.error("[Communications] Send error:", error);
+    parsed = bodySchema.parse(await request.json());
+  } catch (err) {
     return NextResponse.json(
-      { success: false, error: "Failed to send communication" },
-      { status: 500 }
+      { error: "Invalid request body", details: err instanceof z.ZodError ? err.issues : undefined },
+      { status: 400 }
     );
   }
+
+  const results: {
+    sms?: Awaited<ReturnType<typeof sendSms>>;
+    email?: Awaited<ReturnType<typeof sendEmail>>;
+  } = {};
+
+  if (parsed.sms) {
+    results.sms = await sendSms({
+      to: parsed.sms.to,
+      body: parsed.sms.body,
+    });
+  }
+
+  if (parsed.email) {
+    results.email = await sendEmail({
+      to: parsed.email.to,
+      subject: parsed.email.subject,
+      textBody: parsed.email.body,
+      htmlBody: parsed.email.htmlBody,
+      replyTo: parsed.email.replyTo,
+      tag: parsed.email.tag,
+      metadata: parsed.metadata,
+    });
+  }
+
+  const anyDelivered = (results.sms?.delivered ?? false) || (results.email?.delivered ?? false);
+  const anySkipped =
+    Boolean(results.sms?.skipped) || Boolean(results.email?.skipped);
+  const anyError = Boolean(results.sms?.error) || Boolean(results.email?.error);
+
+  return NextResponse.json({
+    success: anyDelivered || (!anyError && !parsed.sms && !parsed.email),
+    delivered: anyDelivered,
+    skipped: anySkipped,
+    results,
+  });
 }

@@ -224,6 +224,105 @@ export function useSendCommunication() {
     });
   }
 
+  /** Resend: Final Payment */
+  function resendFinalPayment(
+    contact: Contact,
+    amount: number,
+    paymentId: string,
+    payUrl?: string
+  ) {
+    return send("resend_final_payment", contact, {
+      amount,
+      relatedId: paymentId,
+      relatedType: "project",
+      payUrl,
+    });
+  }
+
+  /** Contacts: Send Invite Link (new client) */
+  function sendInviteLink(contact: Contact) {
+    return send("send_invite_link", contact, {
+      relatedType: "general",
+    });
+  }
+
+  /** Contacts: Resend Invite Link */
+  function resendInviteLink(contact: Contact) {
+    return send("resend_invite_link", contact, {
+      relatedType: "general",
+    });
+  }
+
+  /** Reminders */
+  function sendPaymentReminder(
+    contact: Contact,
+    amount: number,
+    paymentId: string,
+    payUrl?: string
+  ) {
+    return send("payment_reminder", contact, {
+      amount,
+      relatedId: paymentId,
+      relatedType: "invoice",
+      payUrl,
+    });
+  }
+
+  function sendDepositReminder(
+    contact: Contact,
+    depositAmount: number,
+    paymentId: string,
+    payUrl?: string
+  ) {
+    return send("deposit_reminder", contact, {
+      depositAmount,
+      relatedId: paymentId,
+      relatedType: "project",
+      payUrl,
+    });
+  }
+
+  function sendFinalPaymentReminder(
+    contact: Contact,
+    amount: number,
+    paymentId: string,
+    payUrl?: string
+  ) {
+    return send("final_payment_reminder", contact, {
+      amount,
+      relatedId: paymentId,
+      relatedType: "project",
+      payUrl,
+    });
+  }
+
+  /** System events (typically fired by webhooks, but also exposed for manual ops) */
+  function sendPaymentFailed(
+    contact: Contact,
+    amount: number,
+    paymentId: string,
+    payUrl?: string
+  ) {
+    return send("payment_failed", contact, {
+      amount,
+      relatedId: paymentId,
+      relatedType: "invoice",
+      payUrl,
+    });
+  }
+
+  function sendChargeRefunded(
+    contact: Contact,
+    amount: number,
+    paymentId: string
+  ) {
+    return send("charge_refunded", contact, {
+      amount,
+      relatedId: paymentId,
+      relatedType: "invoice",
+    });
+  }
+
   return {
     send,
     sendInvoice,
@@ -237,6 +336,14 @@ export function useSendCommunication() {
     resendPayLink,
     resendDepositLink,
     resendEstimate,
+    resendFinalPayment,
+    sendInviteLink,
+    resendInviteLink,
+    sendPaymentReminder,
+    sendDepositReminder,
+    sendFinalPaymentReminder,
+    sendPaymentFailed,
+    sendChargeRefunded,
     isSending: mutation.isPending,
   };
 }

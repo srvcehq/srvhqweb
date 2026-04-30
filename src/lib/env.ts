@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+const optionalServerString = z.preprocess(
+  (v) => (v === "" || v === undefined ? undefined : v),
+  z.string().min(1).optional()
+);
+
 const serverSchema = z.object({
   STRIPE_SECRET_KEY: z
     .string()
@@ -25,6 +30,33 @@ const serverSchema = z.object({
       }
       return n;
     }),
+  POSTMARK_SERVER_TOKEN: optionalServerString,
+  POSTMARK_FROM_EMAIL: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : v),
+    z.string().email("POSTMARK_FROM_EMAIL must be a valid email").optional()
+  ),
+  POSTMARK_MESSAGE_STREAM: optionalServerString,
+  TWILIO_ACCOUNT_SID: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : v),
+    z
+      .string()
+      .refine((v) => v.startsWith("AC"), { message: "TWILIO_ACCOUNT_SID must start with AC" })
+      .optional()
+  ),
+  TWILIO_AUTH_TOKEN: optionalServerString,
+  TWILIO_FROM_NUMBER: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : v),
+    z
+      .string()
+      .refine((v) => v.startsWith("+"), {
+        message: "TWILIO_FROM_NUMBER must be E.164 format (e.g. +13035551234)",
+      })
+      .optional()
+  ),
+  MAGIC_LINK_SECRET: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : v),
+    z.string().min(32, "MAGIC_LINK_SECRET must be at least 32 chars (use a long random value)").optional()
+  ),
 });
 
 const optionalString = z.preprocess(
@@ -79,6 +111,13 @@ export function getServerEnv() {
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
     STRIPE_PLATFORM_FEE_BPS: process.env.STRIPE_PLATFORM_FEE_BPS,
+    POSTMARK_SERVER_TOKEN: process.env.POSTMARK_SERVER_TOKEN,
+    POSTMARK_FROM_EMAIL: process.env.POSTMARK_FROM_EMAIL,
+    POSTMARK_MESSAGE_STREAM: process.env.POSTMARK_MESSAGE_STREAM,
+    TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID,
+    TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN,
+    TWILIO_FROM_NUMBER: process.env.TWILIO_FROM_NUMBER,
+    MAGIC_LINK_SECRET: process.env.MAGIC_LINK_SECRET,
   };
 
   if (skipValidation) {

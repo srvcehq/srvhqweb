@@ -139,7 +139,7 @@ export default function ContactDetailPage({
     enabled: !!contactId && !!currentCompanyId,
   });
 
-  const { sendLoginLink, isSending: isSendingComm } = useSendCommunication();
+  const { sendLoginLink, sendInviteLink, resendInviteLink, isSending: isSendingComm } = useSendCommunication();
   const isCommercial = contact?.contact_type === "commercial";
 
   // Auto-open edit plan dialog when navigated with ?editPlan= query param
@@ -441,6 +441,26 @@ export default function ContactDetailPage({
                 >
                   <Archive className="w-4 h-4 mr-2" />
                   <span>Archive Contact</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={isSendingComm || (!contact.phone && !contact.email)}
+                  onClick={() => {
+                    if (contact) sendInviteLink(contact);
+                  }}
+                  className="cursor-pointer"
+                >
+                  <Send className="w-4 h-4 mr-2 text-green-600" />
+                  <span>Send Invite Link</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={isSendingComm || (!contact.phone && !contact.email)}
+                  onClick={() => {
+                    if (contact) resendInviteLink(contact);
+                  }}
+                  className="cursor-pointer"
+                >
+                  <Send className="w-4 h-4 mr-2 text-amber-600" />
+                  <span>Resend Invite Link</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   disabled={isSendingComm || (!contact.phone && !contact.email)}

@@ -125,7 +125,7 @@ export function buildBidViewUrl(bidId: string, meta?: Record<string, string>): s
 
 export function buildClientLoginUrl(contactId: string, meta?: Record<string, string>): string {
   const token = issueMagicLink(contactId, "client_login", { meta });
-  return `${publicEnv.NEXT_PUBLIC_APP_URL}/portal?t=${token}`;
+  return `${publicEnv.NEXT_PUBLIC_APP_URL}/portal/auth?t=${token}`;
 }
 
 export function buildClientInviteUrl(contactId: string, meta?: Record<string, string>): string {

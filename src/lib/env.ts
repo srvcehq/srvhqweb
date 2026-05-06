@@ -57,6 +57,7 @@ const serverSchema = z.object({
     (v) => (v === "" || v === undefined ? undefined : v),
     z.string().min(32, "MAGIC_LINK_SECRET must be at least 32 chars (use a long random value)").optional()
   ),
+  SUPABASE_SERVICE_ROLE_KEY: optionalServerString,
 });
 
 const optionalString = z.preprocess(
@@ -74,6 +75,11 @@ const publicSchema = z.object({
     }),
   NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: optionalString,
   NEXT_PUBLIC_GOOGLE_MAP_ID: optionalString,
+  NEXT_PUBLIC_SUPABASE_URL: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : v),
+    z.string().url("NEXT_PUBLIC_SUPABASE_URL must be a valid URL").optional()
+  ),
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: optionalString,
 });
 
 function format(error: z.ZodError): string {
@@ -87,6 +93,8 @@ const publicInput = {
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
   NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
   NEXT_PUBLIC_GOOGLE_MAP_ID: process.env.NEXT_PUBLIC_GOOGLE_MAP_ID,
+  NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
 };
 
 const _publicEnv = skipValidation
@@ -118,6 +126,7 @@ export function getServerEnv() {
     TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN,
     TWILIO_FROM_NUMBER: process.env.TWILIO_FROM_NUMBER,
     MAGIC_LINK_SECRET: process.env.MAGIC_LINK_SECRET,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
   };
 
   if (skipValidation) {

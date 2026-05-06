@@ -1,4 +1,14 @@
-import { MockEntityStore } from "./store";
+/**
+ * `db` — entity stores backed by Supabase.
+ *
+ * Mirrors the original MockEntityStore API (list/filter/get/create/update/
+ * delete/bulkCreate) so consumers don't need to change.
+ *
+ * The mock store is preserved at src/data/store.ts and src/data/mock/* for
+ * the seed endpoint (/api/dev/seed) to load demo data on a fresh DB.
+ */
+
+import { SupabaseEntityStore } from "@/lib/supabase/entity-store";
 import {
   Contact, Project, Bid, BidLineItem, BidOverhead,
   Payment, Employee, Team,
@@ -10,56 +20,33 @@ import {
   RolePermission, CompanyMembership, Location,
 } from "./types";
 
-import { mockContacts } from "./mock/contacts";
-import { mockEmployees } from "./mock/employees";
-import { mockTeams } from "./mock/teams";
-import { mockProjects } from "./mock/projects";
-import { mockBids } from "./mock/bids";
-import { mockBidLineItems } from "./mock/bid-line-items";
-import { mockPayments } from "./mock/payments";
-import { mockMaintenancePlans } from "./mock/maintenance-plans";
-import { mockMaintenanceVisits } from "./mock/maintenance-visits";
-import { mockMaintenanceItems } from "./mock/maintenance-items";
-import { mockItemsCatalog } from "./mock/items-catalog";
-import { mockHardCosts } from "./mock/hard-costs";
-import { mockCompanySettings } from "./mock/company-settings";
-import { mockScheduleBlocks } from "./mock/schedule-blocks";
-import { mockLocations } from "./mock/locations";
-import { mockCommunications } from "./mock/communications";
-import {
-  mockBidOverheads, mockMilestones, mockProposals,
-  mockProposalThemes, mockOverheadTemplates, mockOverheadTemplateLines,
-  mockRoutePlans, mockRolePermissions, mockCompanyMemberships,
-  mockPhotos, mockDoorToDoorPins,
-} from "./mock/misc";
-
 export const db = {
-  Contact: new MockEntityStore<Contact>("Contact", mockContacts),
-  Project: new MockEntityStore<Project>("Project", mockProjects),
-  Bid: new MockEntityStore<Bid>("Bid", mockBids),
-  BidLineItem: new MockEntityStore<BidLineItem>("BidLineItem", mockBidLineItems),
-  BidOverhead: new MockEntityStore<BidOverhead>("BidOverhead", mockBidOverheads),
-  Payment: new MockEntityStore<Payment>("Payment", mockPayments),
-  Employee: new MockEntityStore<Employee>("Employee", mockEmployees),
-  Team: new MockEntityStore<Team>("Team", mockTeams),
-  MaintenancePlan: new MockEntityStore<MaintenancePlan>("MaintenancePlan", mockMaintenancePlans),
-  MaintenanceVisit: new MockEntityStore<MaintenanceVisit>("MaintenanceVisit", mockMaintenanceVisits),
-  MaintenanceItem: new MockEntityStore<MaintenanceItem>("MaintenanceItem", mockMaintenanceItems),
-  ItemsCatalog: new MockEntityStore<ItemsCatalog>("ItemsCatalog", mockItemsCatalog),
-  ItemCategory: new MockEntityStore<ItemCategory>("ItemCategory", []),
-  HardCost: new MockEntityStore<HardCost>("HardCost", mockHardCosts),
-  CompanySetting: new MockEntityStore<CompanySetting>("CompanySetting", mockCompanySettings),
-  Milestone: new MockEntityStore<Milestone>("Milestone", mockMilestones),
-  Photo: new MockEntityStore<Photo>("Photo", mockPhotos),
-  Proposal: new MockEntityStore<Proposal>("Proposal", mockProposals),
-  ProposalTheme: new MockEntityStore<ProposalTheme>("ProposalTheme", mockProposalThemes),
-  OverheadTemplate: new MockEntityStore<OverheadTemplate>("OverheadTemplate", mockOverheadTemplates),
-  OverheadTemplateLine: new MockEntityStore<OverheadTemplateLine>("OverheadTemplateLine", mockOverheadTemplateLines),
-  ScheduleBlock: new MockEntityStore<ScheduleBlock>("ScheduleBlock", mockScheduleBlocks),
-  RoutePlan: new MockEntityStore<RoutePlan>("RoutePlan", mockRoutePlans),
-  Communication: new MockEntityStore<Communication>("Communication", mockCommunications),
-  DoorToDoorPin: new MockEntityStore<DoorToDoorPin>("DoorToDoorPin", mockDoorToDoorPins),
-  RolePermission: new MockEntityStore<RolePermission>("RolePermission", mockRolePermissions),
-  CompanyMembership: new MockEntityStore<CompanyMembership>("CompanyMembership", mockCompanyMemberships),
-  Location: new MockEntityStore<Location>("Location", mockLocations),
+  Contact:                new SupabaseEntityStore<Contact>("contacts"),
+  Project:                new SupabaseEntityStore<Project>("projects"),
+  Bid:                    new SupabaseEntityStore<Bid>("bids"),
+  BidLineItem:            new SupabaseEntityStore<BidLineItem>("bid_line_items"),
+  BidOverhead:            new SupabaseEntityStore<BidOverhead>("bid_overheads"),
+  Payment:                new SupabaseEntityStore<Payment>("payments"),
+  Employee:               new SupabaseEntityStore<Employee>("employees"),
+  Team:                   new SupabaseEntityStore<Team>("teams"),
+  MaintenancePlan:        new SupabaseEntityStore<MaintenancePlan>("maintenance_plans"),
+  MaintenanceVisit:       new SupabaseEntityStore<MaintenanceVisit>("maintenance_visits"),
+  MaintenanceItem:        new SupabaseEntityStore<MaintenanceItem>("maintenance_items"),
+  ItemsCatalog:           new SupabaseEntityStore<ItemsCatalog>("items_catalog"),
+  ItemCategory:           new SupabaseEntityStore<ItemCategory>("item_categories"),
+  HardCost:               new SupabaseEntityStore<HardCost>("hard_costs"),
+  CompanySetting:         new SupabaseEntityStore<CompanySetting>("company_settings"),
+  Milestone:              new SupabaseEntityStore<Milestone>("milestones"),
+  Photo:                  new SupabaseEntityStore<Photo>("photos"),
+  Proposal:               new SupabaseEntityStore<Proposal>("proposals"),
+  ProposalTheme:          new SupabaseEntityStore<ProposalTheme>("proposal_themes"),
+  OverheadTemplate:       new SupabaseEntityStore<OverheadTemplate>("overhead_templates"),
+  OverheadTemplateLine:   new SupabaseEntityStore<OverheadTemplateLine>("overhead_template_lines"),
+  ScheduleBlock:          new SupabaseEntityStore<ScheduleBlock>("schedule_blocks"),
+  RoutePlan:              new SupabaseEntityStore<RoutePlan>("route_plans"),
+  Communication:          new SupabaseEntityStore<Communication>("communications"),
+  DoorToDoorPin:          new SupabaseEntityStore<DoorToDoorPin>("door_to_door_pins"),
+  RolePermission:         new SupabaseEntityStore<RolePermission>("role_permissions"),
+  CompanyMembership:      new SupabaseEntityStore<CompanyMembership>("company_memberships"),
+  Location:               new SupabaseEntityStore<Location>("locations"),
 };

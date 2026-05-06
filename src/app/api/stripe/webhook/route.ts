@@ -4,11 +4,49 @@ import { stripe } from "@/lib/stripe";
 import { getServerEnv } from "@/lib/env";
 import { sendEmail } from "@/lib/email";
 import { sendSms } from "@/lib/sms";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const COMPANY_NAME_FALLBACK = "TerraFlow";
+
+type PaymentStatus =
+  | "unpaid"
+  | "processing"
+  | "succeeded"
+  | "failed"
+  | "partially_refunded"
+  | "refunded";
+
+async function patchPaymentById(
+  paymentId: string,
+  patch: { status?: PaymentStatus; stripe_payment_intent_id?: string; paid_date?: string },
+) {
+  const { error } = await getSupabaseAdmin()
+    .from("payments")
+    .update(patch as never)
+    .eq("id", paymentId);
+  if (error) {
+    console.error(`[stripe/webhook] failed to patch payment ${paymentId}:`, error.message);
+  }
+}
+
+async function patchPaymentByIntent(
+  paymentIntentId: string,
+  patch: { status?: PaymentStatus; paid_date?: string },
+) {
+  const { error } = await getSupabaseAdmin()
+    .from("payments")
+    .update(patch as never)
+    .eq("stripe_payment_intent_id", paymentIntentId);
+  if (error) {
+    console.error(
+      `[stripe/webhook] failed to patch payment by intent ${paymentIntentId}:`,
+      error.message,
+    );
+  }
+}
 
 function fmtMoney(amountCents: number | null | undefined): string {
   const n = (amountCents ?? 0) / 100;
@@ -95,26 +133,61 @@ export async function POST(request: NextRequest) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
+        const paymentId = session.metadata?.payment_id;
+        const paymentIntentId =
+          typeof session.payment_intent === "string"
+            ? session.payment_intent
+            : session.payment_intent?.id;
         console.log("[stripe/webhook] checkout completed", {
           id: session.id,
           amount_total: session.amount_total,
-          payment_intent: session.payment_intent,
-          metadata: session.metadata,
+          payment_intent: paymentIntentId,
+          payment_id: paymentId,
         });
-        // TODO: mark Payment row as paid when DB is wired
+        if (paymentId) {
+          await patchPaymentById(paymentId, {
+            status: "succeeded",
+            paid_date: new Date().toISOString(),
+            ...(paymentIntentId ? { stripe_payment_intent_id: paymentIntentId } : {}),
+          });
+        }
         break;
       }
       case "payment_intent.succeeded": {
         const pi = event.data.object as Stripe.PaymentIntent;
+        const paymentId = pi.metadata?.payment_id;
         console.log("[stripe/webhook] payment succeeded", { id: pi.id, amount: pi.amount });
+        // Idempotent backstop in case checkout.session.completed didn't fire
+        // (e.g. PaymentIntent created outside of Checkout).
+        if (paymentId) {
+          await patchPaymentById(paymentId, {
+            status: "succeeded",
+            paid_date: new Date().toISOString(),
+            stripe_payment_intent_id: pi.id,
+          });
+        } else {
+          await patchPaymentByIntent(pi.id, {
+            status: "succeeded",
+            paid_date: new Date().toISOString(),
+          });
+        }
         break;
       }
       case "payment_intent.payment_failed": {
         const pi = event.data.object as Stripe.PaymentIntent;
+        const paymentId = pi.metadata?.payment_id;
         console.warn("[stripe/webhook] payment failed", {
           id: pi.id,
           error: pi.last_payment_error?.message,
         });
+        if (paymentId) {
+          await patchPaymentById(paymentId, {
+            status: "failed",
+            stripe_payment_intent_id: pi.id,
+          });
+        } else {
+          await patchPaymentByIntent(pi.id, { status: "failed" });
+        }
         await notifyPaymentFailed({
           email: pi.receipt_email,
           phone: null,
@@ -136,10 +209,21 @@ export async function POST(request: NextRequest) {
       }
       case "charge.refunded": {
         const charge = event.data.object as Stripe.Charge;
+        const paymentIntentId =
+          typeof charge.payment_intent === "string"
+            ? charge.payment_intent
+            : charge.payment_intent?.id;
+        const fullyRefunded = charge.amount_refunded >= charge.amount;
         console.log("[stripe/webhook] refunded", {
           id: charge.id,
           amount_refunded: charge.amount_refunded,
+          fully_refunded: fullyRefunded,
         });
+        if (paymentIntentId) {
+          await patchPaymentByIntent(paymentIntentId, {
+            status: fullyRefunded ? "refunded" : "partially_refunded",
+          });
+        }
         await notifyChargeRefunded({
           email: charge.billing_details?.email,
           phone: charge.billing_details?.phone,

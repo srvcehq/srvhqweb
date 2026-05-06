@@ -185,3 +185,25 @@
     position: relative;
   }
 }
+
+/* Top route-progress bar — used by <TopProgressBar />. Runs once on every
+   navigation, then fades. The element is `key`-bumped per nav so the
+   animation replays from 0%. */
+@keyframes topbar {
+  0% {
+    width: 0%;
+    opacity: 1;
+  }
+  60% {
+    width: 80%;
+    opacity: 1;
+  }
+  90% {
+    width: 100%;
+    opacity: 1;
+  }
+  100% {
+    width: 100%;
+    opacity: 0;
+  }
+}

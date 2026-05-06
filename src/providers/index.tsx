@@ -6,6 +6,7 @@ import { QueryProvider } from "./query-provider";
 import { AuthProvider } from "./auth-provider";
 import { CompanyProvider } from "./company-provider";
 import { EmployeeViewModeProvider } from "./employee-view-provider";
+import { TopProgressBar } from "@/components/shared/top-progress-bar";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -18,7 +19,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryProvider>
         <AuthProvider>
           <CompanyProvider>
-            <EmployeeViewModeProvider>{children}</EmployeeViewModeProvider>
+            <EmployeeViewModeProvider>
+              <TopProgressBar />
+              {children}
+            </EmployeeViewModeProvider>
           </CompanyProvider>
         </AuthProvider>
       </QueryProvider>

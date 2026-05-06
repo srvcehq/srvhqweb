@@ -78,39 +78,44 @@ export default function OnboardingWizard({
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-7 relative border border-gray-100">
+    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-7 relative border border-gray-100 animate-in fade-in slide-in-from-bottom-2 duration-500">
       <StepProgress current={step} />
       <StepLabel step={step} />
 
-      {step === 1 && <WelcomeStep onNext={next} />}
-      {step === 2 && (
-        <BusinessInfoStep
-          onNext={next}
-          onBack={back}
-          value={businessInfo}
-          onChange={setBusinessInfo}
-        />
-      )}
-      {step === 3 && (
-        <ConnectStripeStep
-          onNext={next}
-          onBack={back}
-          companyId={companyId ?? "default"}
-          existingAccountId={stripeAccountId}
-          stripeConnected={stripeConnected}
-          stripeStatusFromUrl={stripeStatusFromUrl}
-        />
-      )}
-      {step === 4 && (
-        <FirstCustomerStep
-          onNext={next}
-          onBack={back}
-          onGoToContacts={handleGoToContacts}
-        />
-      )}
-      {step === 5 && (
-        <DoneStep onDone={handleDone} isCompleting={isCompleting} />
-      )}
+      <div
+        key={step}
+        className="animate-in fade-in slide-in-from-right-2 duration-300"
+      >
+        {step === 1 && <WelcomeStep onNext={next} />}
+        {step === 2 && (
+          <BusinessInfoStep
+            onNext={next}
+            onBack={back}
+            value={businessInfo}
+            onChange={setBusinessInfo}
+          />
+        )}
+        {step === 3 && (
+          <ConnectStripeStep
+            onNext={next}
+            onBack={back}
+            companyId={companyId ?? "default"}
+            existingAccountId={stripeAccountId}
+            stripeConnected={stripeConnected}
+            stripeStatusFromUrl={stripeStatusFromUrl}
+          />
+        )}
+        {step === 4 && (
+          <FirstCustomerStep
+            onNext={next}
+            onBack={back}
+            onGoToContacts={handleGoToContacts}
+          />
+        )}
+        {step === 5 && (
+          <DoneStep onDone={handleDone} isCompleting={isCompleting} />
+        )}
+      </div>
     </div>
   );
 }

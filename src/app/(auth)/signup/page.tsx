@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export default function SignupPage() {
   return (
-    <div className="w-full max-w-md">
+    <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-2 duration-500">
       <div className="flex flex-col items-center mb-6">
         <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-green-500/20 mb-4">
           <Sprout className="w-7 h-7 text-white" />

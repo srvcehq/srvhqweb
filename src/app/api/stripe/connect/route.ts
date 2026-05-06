@@ -14,6 +14,7 @@ const bodySchema = z.object({
   email: z.string().email().optional(),
   country: z.string().length(2).default("US"),
   existingAccountId: z.string().optional(),
+  from: z.enum(["settings", "onboarding"]).default("settings"),
 });
 
 export async function POST(request: NextRequest) {
@@ -47,10 +48,20 @@ export async function POST(request: NextRequest) {
         })
       ).id;
 
+    const base = publicEnv.NEXT_PUBLIC_APP_URL;
+    const returnUrl =
+      parsed.from === "onboarding"
+        ? `${base}/onboarding?step=3&stripe=connected`
+        : `${base}/settings?stripe=connected`;
+    const refreshUrl =
+      parsed.from === "onboarding"
+        ? `${base}/onboarding?step=3&stripe=refresh`
+        : `${base}/settings?stripe=refresh`;
+
     const link = await stripe().accountLinks.create({
       account: accountId,
-      refresh_url: `${publicEnv.NEXT_PUBLIC_APP_URL}/settings?stripe=refresh`,
-      return_url: `${publicEnv.NEXT_PUBLIC_APP_URL}/settings?stripe=connected`,
+      refresh_url: refreshUrl,
+      return_url: returnUrl,
       type: "account_onboarding",
     });
 

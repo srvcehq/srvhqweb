@@ -264,6 +264,9 @@ export interface CompanySetting extends BaseEntity {
   default_hours_per_day?: number;
   labor_cost_mode?: "overhead" | "line_item";
   google_maps_api_key?: string;
+  business_phone?: string;
+  business_address?: string;
+  onboarding_completed_at?: string | null;
 }
 
 export interface Milestone extends BaseEntity {

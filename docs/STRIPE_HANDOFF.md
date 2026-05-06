@@ -159,6 +159,75 @@ Optional polish:
 No Connect-account-side card saving — every contact's cards live on the
 platform Customer because we run destination charges, not direct charges.
 
+## 8. Production polish (must-do)
+
+Five quick configuration items in the Stripe Dashboard before we go live.
+None require code.
+
+### 8a. Connect platform settings
+**Settings → Connect → Settings**
+
+Contractors who onboard their Stripe account through TerraFlow see the platform
+brand on Stripe's hosted onboarding pages. Without this, they see generic Stripe
+copy and lose trust.
+- **Platform name**: TerraFlow
+- **Support email**: support@srvcehq.com (or whatever the founder uses)
+- **Privacy policy URL**: https://www.srvcehq.com/privacy *(pending — see note below)*
+- **Terms of service URL**: https://www.srvcehq.com/terms *(pending)*
+
+### 8b. Public business profile
+**Settings → Business details → Public details**
+
+This is the merchant info shown on Checkout pages and customer receipts.
+- **Public business name**: TerraFlow
+- **Customer support email**: support@srvcehq.com
+- **Customer support phone**: (the toll-free number the founder set up)
+- **Business website**: https://www.srvcehq.com
+
+### 8c. Statement descriptor
+**Settings → Business details → Public details → Statement descriptor**
+
+What shows on a customer's bank/card statement. Default is the legal entity
+name, which is usually ugly.
+- **Statement descriptor**: `SRVCEHQ` or `TERRAFLOW` (max 22 chars,
+  alphanumeric + spaces, no special chars)
+- **Shortened descriptor**: `SRVCEHQ` (max 10 chars, used by some card networks)
+
+### 8d. Customer Portal legal links
+**Settings → Billing → Customer portal**
+
+The portal we configured in Step 3 needs:
+- **Terms of service URL**: https://www.srvcehq.com/terms
+- **Privacy policy URL**: https://www.srvcehq.com/privacy
+
+> ⚠️ The legal pages don't exist yet — the founder is shipping them this week.
+> Use placeholder URLs for now and update once the pages are live, OR wait
+> until they're up to flip into live mode.
+
+### 8e. Webhook delivery alerts
+**Developers → Webhooks → click each endpoint → Notifications**
+
+Enable email alerts for failed webhook deliveries on **both** endpoints
+(platform + Connect). Without these, a silent webhook failure means payments
+in Stripe but nothing updated in our DB, and we'd never know.
+
+---
+
+## 9. Production polish (recommended, not blocking)
+
+| Item | Where | Why |
+|---|---|---|
+| Email receipts | Settings → Emails | Confirm "Successful payments" + "Refunds" toggles are on (default: on). Auto-sends to customers. |
+| Payout schedule | Settings → Payouts | Default daily automatic. Confirm or change to weekly. |
+| Branding | Settings → Branding | Logo, accent color, icon — appears on Checkout, Customer Portal, and emails. Use TerraFlow green (`#16a34a` / emerald gradient). |
+
+## 10. Skip for v1 (we'll add later if needed)
+
+- **Stripe Tax** — only needed for multi-state US sales tax or international VAT.
+- **Apple Pay / Google Pay** — needs domain verification; easy to add later.
+- **Radar custom rules** — defaults are fine.
+- **Email branding HTML** — defaults are clean.
+
 ---
 
 ## How to verify it works

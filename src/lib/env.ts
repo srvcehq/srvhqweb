@@ -58,6 +58,8 @@ const serverSchema = z.object({
     z.string().min(32, "MAGIC_LINK_SECRET must be at least 32 chars (use a long random value)").optional()
   ),
   SUPABASE_SERVICE_ROLE_KEY: optionalServerString,
+  DEV_USER_EMAIL: optionalServerString,
+  DEV_USER_PASSWORD: optionalServerString,
 });
 
 const optionalString = z.preprocess(
@@ -80,6 +82,9 @@ const publicSchema = z.object({
     z.string().url("NEXT_PUBLIC_SUPABASE_URL must be a valid URL").optional()
   ),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: optionalString,
+  NEXT_PUBLIC_AUTH_DEV_MODE: z
+    .preprocess((v) => (v === "" || v === undefined ? "false" : v), z.string())
+    .transform((v) => v === "true" || v === "1"),
 });
 
 function format(error: z.ZodError): string {
@@ -95,10 +100,19 @@ const publicInput = {
   NEXT_PUBLIC_GOOGLE_MAP_ID: process.env.NEXT_PUBLIC_GOOGLE_MAP_ID,
   NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
   NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  NEXT_PUBLIC_AUTH_DEV_MODE: process.env.NEXT_PUBLIC_AUTH_DEV_MODE,
 };
 
 const _publicEnv = skipValidation
-  ? { success: true as const, data: publicInput as z.infer<typeof publicSchema> }
+  ? {
+      success: true as const,
+      data: {
+        ...publicInput,
+        NEXT_PUBLIC_AUTH_DEV_MODE:
+          publicInput.NEXT_PUBLIC_AUTH_DEV_MODE === "true" ||
+          publicInput.NEXT_PUBLIC_AUTH_DEV_MODE === "1",
+      } as unknown as z.infer<typeof publicSchema>,
+    }
   : publicSchema.safeParse(publicInput);
 
 if (!_publicEnv.success) {
@@ -127,6 +141,8 @@ export function getServerEnv() {
     TWILIO_FROM_NUMBER: process.env.TWILIO_FROM_NUMBER,
     MAGIC_LINK_SECRET: process.env.MAGIC_LINK_SECRET,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    DEV_USER_EMAIL: process.env.DEV_USER_EMAIL,
+    DEV_USER_PASSWORD: process.env.DEV_USER_PASSWORD,
   };
 
   if (skipValidation) {

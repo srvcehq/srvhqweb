@@ -21,6 +21,15 @@ const serverSchema = z.object({
       })
       .optional()
   ),
+  STRIPE_CONNECT_WEBHOOK_SECRET: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : v),
+    z
+      .string()
+      .refine((v) => v.startsWith("whsec_"), {
+        message: "STRIPE_CONNECT_WEBHOOK_SECRET must start with whsec_",
+      })
+      .optional()
+  ),
   STRIPE_PLATFORM_FEE_BPS: z
     .preprocess((v) => (v === "" || v === undefined ? "0" : v), z.string())
     .transform((v) => {
@@ -30,6 +39,15 @@ const serverSchema = z.object({
       }
       return n;
     }),
+  STRIPE_PRICE_ID: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : v),
+    z
+      .string()
+      .refine((v) => v.startsWith("price_"), {
+        message: "STRIPE_PRICE_ID must start with price_",
+      })
+      .optional()
+  ),
   POSTMARK_SERVER_TOKEN: optionalServerString,
   POSTMARK_FROM_EMAIL: z.preprocess(
     (v) => (v === "" || v === undefined ? undefined : v),
@@ -132,7 +150,9 @@ export function getServerEnv() {
   const input = {
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+    STRIPE_CONNECT_WEBHOOK_SECRET: process.env.STRIPE_CONNECT_WEBHOOK_SECRET,
     STRIPE_PLATFORM_FEE_BPS: process.env.STRIPE_PLATFORM_FEE_BPS,
+    STRIPE_PRICE_ID: process.env.STRIPE_PRICE_ID,
     POSTMARK_SERVER_TOKEN: process.env.POSTMARK_SERVER_TOKEN,
     POSTMARK_FROM_EMAIL: process.env.POSTMARK_FROM_EMAIL,
     POSTMARK_MESSAGE_STREAM: process.env.POSTMARK_MESSAGE_STREAM,

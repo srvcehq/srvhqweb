@@ -68,7 +68,8 @@ export async function POST(
     );
   }
 
-  // Resolve the contractor's connected Stripe account + customer email.
+  // Resolve the contractor's connected Stripe account + the contact's
+  // saved-customer ID (so we can reuse cards on subsequent payments).
   const [{ data: settingsRow }, { data: contactRow }] = await Promise.all([
     supabase
       .from("company_settings")
@@ -77,7 +78,7 @@ export async function POST(
       .maybeSingle(),
     supabase
       .from("contacts")
-      .select("email")
+      .select("first_name, last_name, email, phone, stripe_customer_id")
       .eq("id", session.contactId)
       .maybeSingle(),
   ]);
@@ -86,7 +87,13 @@ export async function POST(
     stripe_connect_account_id: string | null;
     stripe_connect_status: string | null;
   } | null;
-  const contact = contactRow as { email: string | null } | null;
+  const contact = contactRow as {
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    phone: string | null;
+    stripe_customer_id: string | null;
+  } | null;
 
   const connectedAccountId = settings?.stripe_connect_account_id ?? null;
   const stripeReady =
@@ -97,6 +104,44 @@ export async function POST(
       { error: "Payments are not currently available. Please contact support." },
       { status: 503 }
     );
+  }
+
+  // Look up or create a platform Customer for this contact. Destination
+  // charges run on the platform, so the customer + saved cards live here.
+  // Schema migration 006 may not be applied yet — fall back to stateless
+  // checkout (no card saving) if the column is missing or the read errors.
+  let customerId: string | null = contact?.stripe_customer_id ?? null;
+  if (!customerId) {
+    try {
+      const fullName = [contact?.first_name, contact?.last_name]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      const customer = await stripe().customers.create({
+        email: contact?.email ?? undefined,
+        name: fullName || undefined,
+        phone: contact?.phone ?? undefined,
+        metadata: { contact_id: session.contactId },
+      });
+      customerId = customer.id;
+      const { error: updateErr } = await supabase
+        .from("contacts")
+        .update({ stripe_customer_id: customerId } as never)
+        .eq("id", session.contactId);
+      if (updateErr) {
+        // 42703 = column doesn't exist (migration 006 not yet applied). Don't
+        // block the payment; just lose the card-on-file feature for now.
+        if (
+          updateErr.code !== "42703" &&
+          !/column .* does not exist/i.test(updateErr.message ?? "")
+        ) {
+          console.error("[portal/pay] failed to persist customer id:", updateErr.message);
+        }
+      }
+    } catch (err) {
+      console.error("[portal/pay] customer create failed, falling back:", err);
+      customerId = null;
+    }
   }
 
   const amountCents = Math.round(Number(payment.amount ?? 0) * 100);
@@ -124,13 +169,25 @@ export async function POST(
       payment_intent_data: {
         application_fee_amount: platformFee > 0 ? platformFee : undefined,
         transfer_data: { destination: connectedAccountId },
+        // setup_future_usage: "off_session" tells Stripe to save the payment
+        // method to the attached Customer after a successful charge. On the
+        // next checkout for the same `customer`, Stripe shows a one-click
+        // "Pay with saved card" option.
+        setup_future_usage: customerId ? "off_session" : undefined,
         metadata: {
           payment_id: payment.id,
           contact_id: session.contactId,
           source: "portal",
         },
       },
-      customer_email: contact?.email ?? undefined,
+      // customer + customer_email are mutually exclusive — Stripe pulls the
+      // email from the Customer record when `customer` is set.
+      ...(customerId
+        ? { customer: customerId }
+        : { customer_email: contact?.email ?? undefined }),
+      saved_payment_method_options: customerId
+        ? { payment_method_save: "enabled" }
+        : undefined,
       metadata: {
         payment_id: payment.id,
         contact_id: session.contactId,

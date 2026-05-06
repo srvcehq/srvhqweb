@@ -5,6 +5,7 @@ import { getServerEnv } from "@/lib/env";
 import { sendEmail } from "@/lib/email";
 import { sendSms } from "@/lib/sms";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { patchBillingByCustomerId, type StripeSubscriptionStatus } from "@/lib/billing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -114,17 +115,33 @@ export async function POST(request: NextRequest) {
 
   const rawBody = await request.text();
 
-  const webhookSecret = getServerEnv().STRIPE_WEBHOOK_SECRET;
-  if (!webhookSecret) {
-    console.error("[stripe/webhook] STRIPE_WEBHOOK_SECRET not configured — refusing to process");
+  // Two webhook endpoints land here: the platform endpoint (subscriptions,
+  // platform-level events) and the Connect endpoint (events from connected
+  // accounts, e.g. client portal payments). Each has its own signing secret.
+  // Try both; whichever verifies wins.
+  const env = getServerEnv();
+  const secrets = [env.STRIPE_WEBHOOK_SECRET, env.STRIPE_CONNECT_WEBHOOK_SECRET].filter(
+    (s): s is string => Boolean(s)
+  );
+  if (secrets.length === 0) {
+    console.error(
+      "[stripe/webhook] no webhook secrets configured — set STRIPE_WEBHOOK_SECRET and/or STRIPE_CONNECT_WEBHOOK_SECRET"
+    );
     return NextResponse.json({ error: "Webhook not configured" }, { status: 500 });
   }
 
-  let event: Stripe.Event;
-  try {
-    event = stripe().webhooks.constructEvent(rawBody, signature, webhookSecret);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Invalid signature";
+  let event: Stripe.Event | null = null;
+  let lastError: unknown = null;
+  for (const secret of secrets) {
+    try {
+      event = stripe().webhooks.constructEvent(rawBody, signature, secret);
+      break;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  if (!event) {
+    const message = lastError instanceof Error ? lastError.message : "Invalid signature";
     console.error("[stripe/webhook] signature verification failed:", message);
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
@@ -193,6 +210,38 @@ export async function POST(request: NextRequest) {
           phone: null,
           amountCents: pi.amount,
           errorMessage: pi.last_payment_error?.message,
+        });
+        break;
+      }
+      case "customer.subscription.created":
+      case "customer.subscription.updated":
+      case "customer.subscription.deleted": {
+        const sub = event.data.object as Stripe.Subscription;
+        const customerId =
+          typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+        const item = sub.items?.data?.[0];
+        const priceId = item?.price?.id ?? null;
+        const periodEndUnix = item?.current_period_end ?? null;
+        const periodEnd =
+          typeof periodEndUnix === "number"
+            ? new Date(periodEndUnix * 1000).toISOString()
+            : null;
+        const trialEnd =
+          typeof sub.trial_end === "number"
+            ? new Date(sub.trial_end * 1000).toISOString()
+            : null;
+        console.log(`[stripe/webhook] ${event.type}`, {
+          id: sub.id,
+          customer: customerId,
+          status: sub.status,
+          price: priceId,
+        });
+        await patchBillingByCustomerId(customerId, {
+          stripe_subscription_id: sub.id,
+          subscription_status: sub.status as StripeSubscriptionStatus,
+          subscription_price_id: priceId,
+          subscription_current_period_end: periodEnd,
+          trial_ends_at: trialEnd,
         });
         break;
       }

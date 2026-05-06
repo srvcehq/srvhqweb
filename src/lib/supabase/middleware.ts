@@ -2,6 +2,14 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { publicEnv } from "@/lib/env";
 
+const BILLING_BYPASS_PREFIXES = ["/billing", "/onboarding"];
+
+const ACTIVE_BILLING_STATUSES = new Set([
+  "trialing",
+  "active",
+  "past_due",
+]);
+
 /**
  * Refresh the Supabase session cookie on every contractor-app request, and
  * gate access. Pages we want public (`/login`, `/signup`, `/portal/*`,
@@ -57,6 +65,54 @@ export async function authGate(request: NextRequest) {
       loginUrl.searchParams.set("next", target);
     }
     return NextResponse.redirect(loginUrl);
+  }
+
+  // Subscription gate. /billing and /onboarding bypass this; everywhere else
+  // requires an active subscription. Reads via the user-scoped supabase client
+  // (RLS allows authenticated reads on company_settings).
+  const path = request.nextUrl.pathname;
+  const bypass = BILLING_BYPASS_PREFIXES.some(
+    (prefix) => path === prefix || path.startsWith(prefix + "/")
+  );
+
+  if (!bypass) {
+    // Read subscription_status. We must distinguish three cases:
+    //   1. Column doesn't exist (migration 005 not applied) → fail OPEN.
+    //   2. Column exists, value is non-active (incl. null) → BLOCK.
+    //   3. Column exists, value is active/trialing/past_due → ALLOW.
+    let columnExists = true;
+    let status: string | null = null;
+    try {
+      const { data, error } = await supabase
+        .from("company_settings")
+        .select("subscription_status")
+        .maybeSingle();
+      if (error) {
+        if (
+          error.code === "42703" ||
+          /column .* does not exist/i.test(error.message ?? "")
+        ) {
+          columnExists = false;
+        } else {
+          console.error("[middleware/billing] read error:", error.message);
+          // On unknown errors fail open — better than a redirect loop.
+          columnExists = false;
+        }
+      } else {
+        const row = data as { subscription_status?: string | null } | null;
+        status = row?.subscription_status ?? null;
+      }
+    } catch (err) {
+      console.error("[middleware/billing] read threw:", err);
+      columnExists = false;
+    }
+
+    if (columnExists && (status === null || !ACTIVE_BILLING_STATUSES.has(status))) {
+      const lockUrl = request.nextUrl.clone();
+      lockUrl.pathname = "/billing/locked";
+      lockUrl.search = "";
+      return NextResponse.redirect(lockUrl);
+    }
   }
 
   return response;

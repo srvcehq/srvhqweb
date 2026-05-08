@@ -76,16 +76,21 @@ export async function authGate(request: NextRequest) {
   );
 
   if (!bypass) {
-    // Read subscription_status. We must distinguish three cases:
+    // Read onboarding + billing state. We must distinguish:
     //   1. Column doesn't exist (migration 005 not applied) → fail OPEN.
-    //   2. Column exists, value is non-active (incl. null) → BLOCK.
-    //   3. Column exists, value is active/trialing/past_due → ALLOW.
+    //   2. No row, OR onboarding_completed_at is null → /onboarding.
+    //   3. Row exists, onboarded, status not active → /billing/locked.
+    //   4. Row exists, onboarded, status active/trialing/past_due → ALLOW.
+    type BillingRow = {
+      subscription_status?: string | null;
+      onboarding_completed_at?: string | null;
+    };
     let columnExists = true;
-    let status: string | null = null;
+    let row: BillingRow | null = null;
     try {
       const { data, error } = await supabase
         .from("company_settings")
-        .select("subscription_status")
+        .select("subscription_status, onboarding_completed_at")
         .maybeSingle();
       if (error) {
         if (
@@ -99,19 +104,29 @@ export async function authGate(request: NextRequest) {
           columnExists = false;
         }
       } else {
-        const row = data as { subscription_status?: string | null } | null;
-        status = row?.subscription_status ?? null;
+        row = (data as unknown as BillingRow) ?? null;
       }
     } catch (err) {
       console.error("[middleware/billing] read threw:", err);
       columnExists = false;
     }
 
-    if (columnExists && (status === null || !ACTIVE_BILLING_STATUSES.has(status))) {
-      const lockUrl = request.nextUrl.clone();
-      lockUrl.pathname = "/billing/locked";
-      lockUrl.search = "";
-      return NextResponse.redirect(lockUrl);
+    if (columnExists) {
+      // Not onboarded yet (no row, or onboarding_completed_at null) → onboarding first.
+      if (!row || !row.onboarding_completed_at) {
+        const onboardingUrl = request.nextUrl.clone();
+        onboardingUrl.pathname = "/onboarding";
+        onboardingUrl.search = "";
+        return NextResponse.redirect(onboardingUrl);
+      }
+      // Onboarded but no active subscription → paywall.
+      const status = row.subscription_status ?? null;
+      if (status === null || !ACTIVE_BILLING_STATUSES.has(status)) {
+        const lockUrl = request.nextUrl.clone();
+        lockUrl.pathname = "/billing/locked";
+        lockUrl.search = "";
+        return NextResponse.redirect(lockUrl);
+      }
     }
   }
 

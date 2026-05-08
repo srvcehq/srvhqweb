@@ -43,10 +43,7 @@ export default async function BillingLockedPage() {
   const copy = (status && STATUS_COPY[status]) || DEFAULT_COPY;
 
   // If they already have a subscription on file (canceled, past_due, etc.)
-  // route them through the customer portal so they update payment / resub
-  // against the existing customer record. Otherwise fresh checkout.
-  const action = billing?.stripe_customer_id ? "/api/billing/portal" : "/api/billing/checkout";
-
+  // route them through the customer portal. Otherwise show the plan picker.
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-6">
       <div className="flex items-center gap-3">
@@ -61,14 +58,38 @@ export default async function BillingLockedPage() {
         <p className="text-gray-600 text-sm leading-relaxed">{copy.body}</p>
       </div>
 
-      <form action={action} method="post">
-        <button
-          type="submit"
-          className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
-        >
-          {copy.cta}
-        </button>
-      </form>
+      {billing?.stripe_customer_id ? (
+        <form action="/api/billing/portal" method="post">
+          <button
+            type="submit"
+            className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
+          >
+            {copy.cta}
+          </button>
+        </form>
+      ) : (
+        <div className="space-y-3">
+          <form action="/api/billing/checkout" method="post">
+            <input type="hidden" name="plan" value="annual" />
+            <button
+              type="submit"
+              className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-between"
+            >
+              <span>Annual — save vs monthly</span>
+              <span className="text-xs font-normal opacity-90">Best value</span>
+            </button>
+          </form>
+          <form action="/api/billing/checkout" method="post">
+            <input type="hidden" name="plan" value="monthly" />
+            <button
+              type="submit"
+              className="w-full bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-900 font-semibold py-3 px-4 rounded-lg transition-colors"
+            >
+              Monthly
+            </button>
+          </form>
+        </div>
+      )}
 
       {status === "past_due" && (
         <p className="text-xs text-amber-600 text-center">

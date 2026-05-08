@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getServerEnv, publicEnv } from "@/lib/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -8,7 +8,7 @@ import { getCompanySettings } from "@/lib/company-settings";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -17,10 +17,13 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const priceId = getServerEnv().STRIPE_PRICE_ID;
+  const form = await request.formData().catch(() => null);
+  const plan = form?.get("plan") === "annual" ? "annual" : "monthly";
+  const env = getServerEnv();
+  const priceId = plan === "annual" ? env.STRIPE_PRICE_ID_ANNUAL : env.STRIPE_PRICE_ID_MONTHLY;
   if (!priceId) {
     return NextResponse.json(
-      { error: "STRIPE_PRICE_ID is not configured" },
+      { error: `STRIPE_PRICE_ID_${plan.toUpperCase()} is not configured` },
       { status: 500 }
     );
   }
@@ -56,9 +59,9 @@ export async function POST() {
     allow_promotion_codes: true,
     billing_address_collection: "auto",
     subscription_data: {
-      metadata: { company_settings_id: settings.id, user_id: user.id },
+      metadata: { company_settings_id: settings.id, user_id: user.id, plan },
     },
-    metadata: { company_settings_id: settings.id, user_id: user.id },
+    metadata: { company_settings_id: settings.id, user_id: user.id, plan },
   });
 
   if (!session.url) {

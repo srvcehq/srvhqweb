@@ -19,19 +19,24 @@ You can't proceed until live mode is active.
 
 ---
 
-## 2. Create the subscription Product + Price
+## 2. Create the subscription Product + two Prices (monthly + annual)
 
 Live mode → Product catalog → **+ Add product**.
 
 - **Name**: TerraFlow Subscription
-- **Description**: TerraFlow contractor app monthly subscription
+- **Description**: TerraFlow contractor app subscription
 - **Pricing model**: Standard pricing
-- **Price**: (whatever the founder decides — e.g. $99.00 USD)
-- **Billing period**: Monthly (or whatever cadence)
+- **Price #1**: monthly recurring — e.g. $99.00 USD / month
 - **Free trial**: optional — set days here if we want trials (e.g. 14)
 - Save
 
-After save, click into the product → copy the **Price ID** (starts with `price_…`). You'll send this back as `STRIPE_PRICE_ID`.
+Then add a **second** recurring price on the same product:
+- Click into the product → **Pricing → + Add another price**
+- **Price #2**: annual recurring — e.g. $990.00 USD / year (founder picks the discount)
+
+After save, copy **both Price IDs** (each starts with `price_…`). You'll send
+them back as `STRIPE_PRICE_ID_MONTHLY` and `STRIPE_PRICE_ID_ANNUAL`. The paywall
+shows both options to the customer; checkout receives the chosen `plan` field.
 
 ---
 
@@ -104,7 +109,8 @@ The founder will paste these into Netlify (Site settings → Environment variabl
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Developers → API keys → **Live publishable key** (`pk_live_…`) |
 | `STRIPE_WEBHOOK_SECRET` | Step 4a — platform webhook signing secret (`whsec_…`) |
 | `STRIPE_CONNECT_WEBHOOK_SECRET` | Step 4b — Connect webhook signing secret (`whsec_…`, different from 4a) |
-| `STRIPE_PRICE_ID` | Step 2 — product price ID (`price_…`) |
+| `STRIPE_PRICE_ID_MONTHLY` | Step 2 — monthly price ID (`price_…`) |
+| `STRIPE_PRICE_ID_ANNUAL` | Step 2 — annual price ID (`price_…`) |
 
 Optional:
 - `STRIPE_PLATFORM_FEE_BPS` — basis points fee on client-portal payments (currently `0`). Set to e.g. `100` for 1%.

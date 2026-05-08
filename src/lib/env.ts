@@ -39,12 +39,21 @@ const serverSchema = z.object({
       }
       return n;
     }),
-  STRIPE_PRICE_ID: z.preprocess(
+  STRIPE_PRICE_ID_MONTHLY: z.preprocess(
     (v) => (v === "" || v === undefined ? undefined : v),
     z
       .string()
       .refine((v) => v.startsWith("price_"), {
-        message: "STRIPE_PRICE_ID must start with price_",
+        message: "STRIPE_PRICE_ID_MONTHLY must start with price_",
+      })
+      .optional()
+  ),
+  STRIPE_PRICE_ID_ANNUAL: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : v),
+    z
+      .string()
+      .refine((v) => v.startsWith("price_"), {
+        message: "STRIPE_PRICE_ID_ANNUAL must start with price_",
       })
       .optional()
   ),
@@ -152,7 +161,8 @@ export function getServerEnv() {
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
     STRIPE_CONNECT_WEBHOOK_SECRET: process.env.STRIPE_CONNECT_WEBHOOK_SECRET,
     STRIPE_PLATFORM_FEE_BPS: process.env.STRIPE_PLATFORM_FEE_BPS,
-    STRIPE_PRICE_ID: process.env.STRIPE_PRICE_ID,
+    STRIPE_PRICE_ID_MONTHLY: process.env.STRIPE_PRICE_ID_MONTHLY,
+    STRIPE_PRICE_ID_ANNUAL: process.env.STRIPE_PRICE_ID_ANNUAL,
     POSTMARK_SERVER_TOKEN: process.env.POSTMARK_SERVER_TOKEN,
     POSTMARK_FROM_EMAIL: process.env.POSTMARK_FROM_EMAIL,
     POSTMARK_MESSAGE_STREAM: process.env.POSTMARK_MESSAGE_STREAM,

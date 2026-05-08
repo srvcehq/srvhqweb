@@ -1,0 +1,9 @@
+User-agent: *
+Disallow: /portal/
+Disallow: /api/
+Disallow: /onboarding/
+Disallow: /billing/
+Disallow: /login
+Disallow: /signup
+
+Sitemap: https://www.srvcehq.com/sitemap.xml

@@ -1,0 +1,32 @@
+[build]
+  command = "npm run build"
+
+[build.environment]
+  NEXT_TELEMETRY_DISABLED = "1"
+  NODE_VERSION = "20"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# --- Security headers (apply globally) ---
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(self)"
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
+
+# --- Keep client portal out of search results ---
+[[headers]]
+  for = "/portal/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+
+# --- Apex -> www (defense-in-depth; primary domain in Netlify UI also handles this) ---
+[[redirects]]
+  from = "https://srvcehq.com/*"
+  to = "https://www.srvcehq.com/:splat"
+  status = 301
+  force = true

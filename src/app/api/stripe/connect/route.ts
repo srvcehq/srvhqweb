@@ -3,6 +3,7 @@ import { z } from "zod";
 import { stripe } from "@/lib/stripe";
 import { publicEnv } from "@/lib/env";
 import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
+import { upsertCompanySettings } from "@/lib/company-settings";
 
 export const runtime = "nodejs";
 
@@ -32,21 +33,26 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const accountId =
-      parsed.existingAccountId ??
-      (
-        await stripe().accounts.create({
-          type: "express",
-          country: parsed.country,
-          email: parsed.email,
-          capabilities: {
-            card_payments: { requested: true },
-            transfers: { requested: true },
-          },
-          business_type: "company",
-          metadata: { company_id: parsed.companyId },
-        })
-      ).id;
+    let accountId = parsed.existingAccountId ?? null;
+    if (!accountId) {
+      const account = await stripe().accounts.create({
+        type: "express",
+        country: parsed.country,
+        email: parsed.email,
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+        business_type: "company",
+        metadata: { company_id: parsed.companyId },
+      });
+      accountId = account.id;
+      // Persist immediately so a refresh mid-flow doesn't lose the account ID.
+      await upsertCompanySettings({
+        stripe_connect_account_id: accountId,
+        stripe_connect_status: "pending",
+      });
+    }
 
     const base = publicEnv.NEXT_PUBLIC_APP_URL;
     const returnUrl =

@@ -253,7 +253,21 @@ export async function POST(request: NextRequest) {
           payouts_enabled: account.payouts_enabled,
           details_submitted: account.details_submitted,
         });
-        // TODO: persist Connect onboarding state on company record when DB is wired
+        const status = account.charges_enabled && account.payouts_enabled
+          ? "active"
+          : account.details_submitted
+            ? "pending_review"
+            : "pending";
+        const { error } = await getSupabaseAdmin()
+          .from("company_settings")
+          .update({ stripe_connect_status: status } as never)
+          .eq("stripe_connect_account_id", account.id);
+        if (error) {
+          console.error(
+            `[stripe/webhook] failed to update connect status for ${account.id}:`,
+            error.message,
+          );
+        }
         break;
       }
       case "charge.refunded": {

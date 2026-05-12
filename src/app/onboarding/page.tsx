@@ -16,12 +16,15 @@ function clampStep(raw: string | null): number {
 export default async function OnboardingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ step?: string; stripe?: string }>;
+  searchParams: Promise<{ step?: string; stripe?: string; restart?: string }>;
 }) {
   const params = await searchParams;
   const settings = await getCompanySettings();
 
-  if (settings?.onboarding_completed_at) {
+  // Normally, an already-onboarded account hitting /onboarding bounces to the
+  // dashboard. `?restart=1` lets you walk the wizard again (useful for demos)
+  // without having to null out company_settings.onboarding_completed_at.
+  if (settings?.onboarding_completed_at && params.restart !== "1") {
     redirect("/dashboard");
   }
 

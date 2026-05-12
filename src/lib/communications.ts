@@ -1,5 +1,6 @@
 import { db } from "@/data/api";
-import type { Communication, Contact, CompanySetting } from "@/data/types";
+import { publicEnv } from "@/lib/env";
+import type { Communication, Contact } from "@/data/types";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -51,6 +52,12 @@ export interface SendCommunicationParams {
   relatedType?: Communication["related_type"];
   /** override pay link with a real Stripe Checkout URL */
   payUrl?: string;
+  /**
+   * A real signed client-portal URL (from `/api/portal/link`) used for
+   * login/invite links and as the fallback target for pay/estimate links.
+   * `sendCommunication()` fetches one automatically if not supplied.
+   */
+  portalUrl?: string;
 }
 
 interface TemplateResult {
@@ -64,17 +71,28 @@ interface TemplateResult {
 /* Link generators                                                     */
 /* ------------------------------------------------------------------ */
 
-function paymentLink(relatedId?: string, override?: string): string {
-  if (override) return override;
-  return `https://pay.terraflow.com/p/${relatedId || "unknown"}`;
+const APP_URL = (publicEnv.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+
+/** Where a client picks up unfinished business (invoices, proposals) when we
+ * don't have a more specific deep link — the portal landing page. */
+function portalHome(): string {
+  return APP_URL ? `${APP_URL}/portal` : "/portal";
 }
 
-function bidLink(relatedId?: string): string {
-  return `https://app.terraflow.com/bid/${relatedId || "unknown"}`;
+/** Pay link: prefer a real Stripe Checkout URL, then a signed portal URL,
+ * else the portal landing page. */
+function paymentLink(override?: string, portalUrl?: string): string {
+  return override || portalUrl || portalHome();
 }
 
-function loginLink(contactId: string): string {
-  return `https://app.terraflow.com/portal/${contactId}`;
+/** Estimate/bid view: clients review proposals inside the portal. */
+function bidLink(portalUrl?: string): string {
+  return portalUrl || portalHome();
+}
+
+/** Client portal login/invite link. */
+function loginLink(portalUrl?: string): string {
+  return portalUrl || portalHome();
 }
 
 /* ------------------------------------------------------------------ */
@@ -98,10 +116,10 @@ function buildTemplate(params: SendCommunicationParams): TemplateResult {
     amount,
     depositAmount,
     title,
-    relatedId,
     payUrl,
+    portalUrl,
   } = params;
-  const link = (id?: string) => paymentLink(id, payUrl);
+  const link = () => paymentLink(payUrl, portalUrl);
 
   const customerName = `${contact.first_name} ${contact.last_name}`.trim() || "there";
   const amt = fmtMoney(amount);
@@ -112,164 +130,164 @@ function buildTemplate(params: SendCommunicationParams): TemplateResult {
     /* ---- Payments: Send Invoice ---- */
     case "send_invoice":
       return {
-        sms: `${companyName}: Your invoice for ${amt} is ready. Pay here: ${link(relatedId)}`,
+        sms: `${companyName}: Your invoice for ${amt} is ready. Pay here: ${link()}`,
         emailSubject: "Your Invoice is Ready",
-        emailBody: `Hi ${customerName},\n\nYour invoice for ${title || "services rendered"} is ready.\n\nAmount due: ${amt}\n\nYou can pay securely here:\n${link(relatedId)}\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nYour invoice for ${title || "services rendered"} is ready.\n\nAmount due: ${amt}\n\nYou can pay securely here:\n${link()}\n\nThanks,\n${companyName}`,
         channel: "invoice",
       };
 
     /* ---- Bids / Live Estimating: Send Estimate ---- */
     case "send_estimate":
       return {
-        sms: `${companyName}: Your estimate for ${amt} is ready. View it here: ${bidLink(relatedId)}`,
+        sms: `${companyName}: Your estimate for ${amt} is ready. View it here: ${bidLink(portalUrl)}`,
         emailSubject: "Your Estimate is Ready",
-        emailBody: `Hi ${customerName},\n\nYour estimate for ${projectName} is ready.\n\nTotal: ${amt}\nDeposit due: ${dep}\n\nView your estimate here:\n${bidLink(relatedId)}\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nYour estimate for ${projectName} is ready.\n\nTotal: ${amt}\nDeposit due: ${dep}\n\nView your estimate here:\n${bidLink(portalUrl)}\n\nThanks,\n${companyName}`,
         channel: "estimate",
       };
 
     /* ---- Projects: Schedule & Send Deposit ---- */
     case "send_deposit_scheduled":
       return {
-        sms: `${companyName}: Your project is scheduled. A deposit of ${dep} is due to secure your spot. Pay here: ${link(relatedId)}`,
+        sms: `${companyName}: Your project is scheduled. A deposit of ${dep} is due to secure your spot. Pay here: ${link()}`,
         emailSubject: "Project Scheduled \u2013 Deposit Required",
-        emailBody: `Hi ${customerName},\n\nYour project has been scheduled.\n\nDeposit due: ${dep}\n\nPlease complete your deposit here:\n${link(relatedId)}\n\nWe look forward to getting started.\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nYour project has been scheduled.\n\nDeposit due: ${dep}\n\nPlease complete your deposit here:\n${link()}\n\nWe look forward to getting started.\n\nThanks,\n${companyName}`,
         channel: "payment_link",
       };
 
     /* ---- Projects: Accept (no date) & Send Deposit ---- */
     case "send_deposit_approved":
       return {
-        sms: `${companyName}: Your project has been approved. A deposit of ${dep} is required to get started. Pay here: ${link(relatedId)}`,
+        sms: `${companyName}: Your project has been approved. A deposit of ${dep} is required to get started. Pay here: ${link()}`,
         emailSubject: "Project Approved \u2013 Deposit Required",
-        emailBody: `Hi ${customerName},\n\nYour project has been approved.\n\nDeposit due: ${dep}\n\nPlease complete your deposit here:\n${link(relatedId)}\n\nWe'll schedule your project once the deposit is received.\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nYour project has been approved.\n\nDeposit due: ${dep}\n\nPlease complete your deposit here:\n${link()}\n\nWe'll schedule your project once the deposit is received.\n\nThanks,\n${companyName}`,
         channel: "payment_link",
       };
 
     /* ---- Projects: Complete & Send Final Pay ---- */
     case "send_final_payment":
       return {
-        sms: `${companyName}: Your project is complete. Your final balance of ${amt} is ready. Pay here: ${link(relatedId)}`,
+        sms: `${companyName}: Your project is complete. Your final balance of ${amt} is ready. Pay here: ${link()}`,
         emailSubject: "Project Complete \u2013 Final Payment Due",
-        emailBody: `Hi ${customerName},\n\nYour project has been completed.\n\nFinal balance due: ${amt}\n\nYou can complete your payment here:\n${link(relatedId)}\n\nThank you for your business.\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nYour project has been completed.\n\nFinal balance due: ${amt}\n\nYou can complete your payment here:\n${link()}\n\nThank you for your business.\n\nThanks,\n${companyName}`,
         channel: "payment_link",
       };
 
     /* ---- Contacts: Send Login Link ---- */
     case "send_login_link":
       return {
-        sms: `${companyName}: Access your client portal here: ${loginLink(contact.id)}`,
+        sms: `${companyName}: Access your client portal here: ${loginLink(portalUrl)}`,
         emailSubject: "Access Your Client Portal",
-        emailBody: `Hi ${customerName},\n\nYou can access your client portal using the link below:\n\n${loginLink(contact.id)}\n\nThis will let you view your projects, payments, and job history.\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nYou can access your client portal using the link below:\n\n${loginLink(portalUrl)}\n\nThis will let you view your projects, payments, and job history.\n\nThanks,\n${companyName}`,
         channel: "system",
       };
 
     /* ---- Schedule: Service Complete — Send Pay Link ---- */
     case "send_service_pay_link":
       return {
-        sms: `${companyName}: Your service is complete. Your balance of ${amt} is ready. Pay here: ${link(relatedId)}`,
+        sms: `${companyName}: Your service is complete. Your balance of ${amt} is ready. Pay here: ${link()}`,
         emailSubject: "Service Complete \u2013 Payment Due",
-        emailBody: `Hi ${customerName},\n\nYour service has been completed.\n\nAmount due: ${amt}\n\nYou can complete your payment here:\n${link(relatedId)}\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nYour service has been completed.\n\nAmount due: ${amt}\n\nYou can complete your payment here:\n${link()}\n\nThanks,\n${companyName}`,
         channel: "payment_link",
       };
 
     /* ---- Schedule: Charge Card Confirmation ---- */
     case "send_card_charged":
       return {
-        sms: `${companyName}: Your service is complete. Your card has been charged ${amt}. View details here: ${loginLink(contact.id)}`,
+        sms: `${companyName}: Your service is complete. Your card has been charged ${amt}. View details here: ${loginLink(portalUrl)}`,
         emailSubject: "Service Complete \u2013 Payment Received",
-        emailBody: `Hi ${customerName},\n\nYour service has been completed and your card has been successfully charged.\n\nAmount paid: ${amt}\n\nYou can view your payment and history here:\n${loginLink(contact.id)}\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nYour service has been completed and your card has been successfully charged.\n\nAmount paid: ${amt}\n\nYou can view your payment and history here:\n${loginLink(portalUrl)}\n\nThanks,\n${companyName}`,
         channel: "payment_link",
       };
 
     /* ---- Resend variants ---- */
     case "resend_pay_link":
       return {
-        sms: `${companyName}: Reminder — your balance of ${amt} is ready. Pay here: ${link(relatedId)}`,
+        sms: `${companyName}: Reminder — your balance of ${amt} is ready. Pay here: ${link()}`,
         emailSubject: "Payment Reminder",
-        emailBody: `Hi ${customerName},\n\nThis is a reminder that you have an outstanding balance.\n\nAmount due: ${amt}\n\nYou can pay here:\n${link(relatedId)}\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nThis is a reminder that you have an outstanding balance.\n\nAmount due: ${amt}\n\nYou can pay here:\n${link()}\n\nThanks,\n${companyName}`,
         channel: "payment_link",
       };
 
     case "resend_deposit_link":
       return {
-        sms: `${companyName}: Reminder — a deposit of ${dep} is required. Pay here: ${link(relatedId)}`,
+        sms: `${companyName}: Reminder — a deposit of ${dep} is required. Pay here: ${link()}`,
         emailSubject: "Deposit Reminder",
-        emailBody: `Hi ${customerName},\n\nThis is a reminder that a deposit is required for your project.\n\nDeposit due: ${dep}\n\nPlease complete your deposit here:\n${link(relatedId)}\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nThis is a reminder that a deposit is required for your project.\n\nDeposit due: ${dep}\n\nPlease complete your deposit here:\n${link()}\n\nThanks,\n${companyName}`,
         channel: "payment_link",
       };
 
     case "resend_estimate":
       return {
-        sms: `${companyName}: Your estimate for ${amt} is still available. View it here: ${bidLink(relatedId)}`,
+        sms: `${companyName}: Your estimate for ${amt} is still available. View it here: ${bidLink(portalUrl)}`,
         emailSubject: "Your Estimate \u2013 Follow Up",
-        emailBody: `Hi ${customerName},\n\nJust following up \u2014 your estimate for ${projectName} is still available.\n\nTotal: ${amt}\n\nView it here:\n${bidLink(relatedId)}\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nJust following up \u2014 your estimate for ${projectName} is still available.\n\nTotal: ${amt}\n\nView it here:\n${bidLink(portalUrl)}\n\nThanks,\n${companyName}`,
         channel: "estimate",
       };
 
     case "resend_final_payment":
       return {
-        sms: `${companyName}: Reminder — your final balance of ${amt} is ready. Pay here: ${link(relatedId)}`,
+        sms: `${companyName}: Reminder — your final balance of ${amt} is ready. Pay here: ${link()}`,
         emailSubject: "Final Payment Reminder",
-        emailBody: `Hi ${customerName},\n\nThis is a reminder that your final payment is due.\n\nFinal balance: ${amt}\n\nComplete payment here:\n${link(relatedId)}\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nThis is a reminder that your final payment is due.\n\nFinal balance: ${amt}\n\nComplete payment here:\n${link()}\n\nThanks,\n${companyName}`,
         channel: "payment_link",
       };
 
     /* ---- Invites ---- */
     case "send_invite_link":
       return {
-        sms: `${companyName}: Welcome! Set up your client portal here: ${loginLink(contact.id)}`,
+        sms: `${companyName}: Welcome! Set up your client portal here: ${loginLink(portalUrl)}`,
         emailSubject: `Welcome to ${companyName}`,
-        emailBody: `Hi ${customerName},\n\nWelcome — we've set up your client portal.\n\nClick below to complete your account setup. You'll be able to view your projects, payments, and history.\n\n${loginLink(contact.id)}\n\nIf you have any questions, just reply to this email.\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nWelcome — we've set up your client portal.\n\nClick below to complete your account setup. You'll be able to view your projects, payments, and history.\n\n${loginLink(portalUrl)}\n\nIf you have any questions, just reply to this email.\n\nThanks,\n${companyName}`,
         channel: "system",
       };
 
     case "resend_invite_link":
       return {
-        sms: `${companyName}: Your portal invite is still active: ${loginLink(contact.id)}`,
+        sms: `${companyName}: Your portal invite is still active: ${loginLink(portalUrl)}`,
         emailSubject: `Your ${companyName} portal invite`,
-        emailBody: `Hi ${customerName},\n\nJust a reminder that your client portal invite is still active. Click below to set up your account:\n\n${loginLink(contact.id)}\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nJust a reminder that your client portal invite is still active. Click below to set up your account:\n\n${loginLink(portalUrl)}\n\nThanks,\n${companyName}`,
         channel: "system",
       };
 
     /* ---- Reminders ---- */
     case "payment_reminder":
       return {
-        sms: `${companyName}: Friendly reminder — your balance of ${amt} is still outstanding. Pay here: ${link(relatedId)}`,
+        sms: `${companyName}: Friendly reminder — your balance of ${amt} is still outstanding. Pay here: ${link()}`,
         emailSubject: "Friendly Payment Reminder",
-        emailBody: `Hi ${customerName},\n\nWe wanted to send a friendly reminder that your balance is still outstanding.\n\nAmount due: ${amt}\n\nYou can pay here:\n${link(relatedId)}\n\nIf you've already paid, please disregard this message.\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nWe wanted to send a friendly reminder that your balance is still outstanding.\n\nAmount due: ${amt}\n\nYou can pay here:\n${link()}\n\nIf you've already paid, please disregard this message.\n\nThanks,\n${companyName}`,
         channel: "payment_link",
       };
 
     case "deposit_reminder":
       return {
-        sms: `${companyName}: Friendly reminder — your deposit of ${dep} is needed to schedule your project. Pay here: ${link(relatedId)}`,
+        sms: `${companyName}: Friendly reminder — your deposit of ${dep} is needed to schedule your project. Pay here: ${link()}`,
         emailSubject: "Friendly Deposit Reminder",
-        emailBody: `Hi ${customerName},\n\nFriendly reminder that we need your deposit to schedule your project.\n\nDeposit due: ${dep}\n\nComplete your deposit here:\n${link(relatedId)}\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nFriendly reminder that we need your deposit to schedule your project.\n\nDeposit due: ${dep}\n\nComplete your deposit here:\n${link()}\n\nThanks,\n${companyName}`,
         channel: "payment_link",
       };
 
     case "final_payment_reminder":
       return {
-        sms: `${companyName}: Friendly reminder — your final payment of ${amt} is due. Pay here: ${link(relatedId)}`,
+        sms: `${companyName}: Friendly reminder — your final payment of ${amt} is due. Pay here: ${link()}`,
         emailSubject: "Friendly Final Payment Reminder",
-        emailBody: `Hi ${customerName},\n\nFriendly reminder that your final balance is still due.\n\nAmount due: ${amt}\n\nComplete payment here:\n${link(relatedId)}\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nFriendly reminder that your final balance is still due.\n\nAmount due: ${amt}\n\nComplete payment here:\n${link()}\n\nThanks,\n${companyName}`,
         channel: "payment_link",
       };
 
     /* ---- System events (auto-fired by webhooks) ---- */
     case "payment_failed":
       return {
-        sms: `${companyName}: Your payment of ${amt} could not be processed. Please update your card and try again: ${link(relatedId)}`,
+        sms: `${companyName}: Your payment of ${amt} could not be processed. Please update your card and try again: ${link()}`,
         emailSubject: "Payment Could Not Be Processed",
-        emailBody: `Hi ${customerName},\n\nWe weren't able to process your payment of ${amt}. This usually means the card was declined or has expired.\n\nYou can try again with a different card here:\n${link(relatedId)}\n\nIf you continue to have trouble, just reply to this email.\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nWe weren't able to process your payment of ${amt}. This usually means the card was declined or has expired.\n\nYou can try again with a different card here:\n${link()}\n\nIf you continue to have trouble, just reply to this email.\n\nThanks,\n${companyName}`,
         channel: "payment_link",
       };
 
     case "ach_failed":
       return {
-        sms: `${companyName}: Your bank transfer for ${amt} failed. Please retry payment: ${link(relatedId)}`,
+        sms: `${companyName}: Your bank transfer for ${amt} failed. Please retry payment: ${link()}`,
         emailSubject: "Bank Transfer Failed",
-        emailBody: `Hi ${customerName},\n\nYour bank transfer of ${amt} did not go through. This sometimes happens with insufficient funds or account issues.\n\nYou can retry the payment here:\n${link(relatedId)}\n\nIf you have questions, please reply to this email.\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nYour bank transfer of ${amt} did not go through. This sometimes happens with insufficient funds or account issues.\n\nYou can retry the payment here:\n${link()}\n\nIf you have questions, please reply to this email.\n\nThanks,\n${companyName}`,
         channel: "payment_link",
       };
 
@@ -283,9 +301,9 @@ function buildTemplate(params: SendCommunicationParams): TemplateResult {
 
     default:
       return {
-        sms: `${companyName}: You have a new notification. Log in to view: ${loginLink(contact.id)}`,
+        sms: `${companyName}: You have a new notification. Log in to view: ${loginLink(portalUrl)}`,
         emailSubject: "New Notification",
-        emailBody: `Hi ${customerName},\n\nYou have a new notification. Please log in to view it.\n\n${loginLink(contact.id)}\n\nThanks,\n${companyName}`,
+        emailBody: `Hi ${customerName},\n\nYou have a new notification. Please log in to view it.\n\n${loginLink(portalUrl)}\n\nThanks,\n${companyName}`,
         channel: "system",
       };
   }
@@ -306,11 +324,42 @@ export interface SendResult {
  * When real providers are wired up, this function will also
  * call /api/communications/send to deliver via Twilio/email.
  */
+/** Actions whose message body should carry a portal *invite* link (new client
+ * setting up access). Everything else uses a *login* link. */
+const INVITE_ACTIONS = new Set<CommunicationAction>([
+  "send_invite_link",
+  "resend_invite_link",
+]);
+
+async function fetchPortalUrl(
+  contactId: string,
+  type: "invite" | "login"
+): Promise<string | undefined> {
+  try {
+    const res = await fetch(
+      `/api/portal/link?contactId=${encodeURIComponent(contactId)}&type=${type}`
+    );
+    if (!res.ok) return undefined;
+    const data = (await res.json()) as { url?: string };
+    return data.url || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function sendCommunication(
   params: SendCommunicationParams
 ): Promise<SendResult> {
-  const template = buildTemplate(params);
   const { contact, companyId, method } = params;
+
+  // Resolve a real, signed client-portal URL for the message body (login or
+  // invite link). Used directly for portal links and as the fallback target
+  // for pay/estimate links when no Stripe Checkout URL was supplied.
+  const portalUrl =
+    params.portalUrl ??
+    (await fetchPortalUrl(contact.id, INVITE_ACTIONS.has(params.action) ? "invite" : "login"));
+
+  const template = buildTemplate({ ...params, portalUrl });
 
   const result: SendResult = { method };
 

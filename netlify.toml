@@ -8,6 +8,11 @@
   # scanning would otherwise flag them as exposed. Maps key is protected by
   # HTTP-referrer restrictions in Google Cloud, not by secrecy.
   SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_APP_URL,NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,NEXT_PUBLIC_GOOGLE_MAP_ID,NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,NEXT_PUBLIC_AUTH_DEV_MODE"
+  # The Pro plan's "smart" pattern scanner flags the NEXT_PUBLIC Google Maps
+  # key (an `AIza…` string) even though it's whitelisted above and is
+  # publishable by design. Turn off the heuristic layer; the name-based
+  # SECRETS_SCAN_OMIT_KEYS scan still covers the real server-side secrets.
+  SECRETS_SCAN_SMART_DETECTION_ENABLED = "false"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"

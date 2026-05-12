@@ -1,23 +1,20 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { verifyMagicLink } from "@/lib/magic-links";
 import { setPortalSession } from "@/lib/portal-session";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { relativeRedirect } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function redirectTo(req: NextRequest, path: string) {
-  return NextResponse.redirect(new URL(path, req.url), { status: 303 });
-}
-
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("t");
-  if (!token) return redirectTo(req, "/portal?reason=no_token");
+  if (!token) return relativeRedirect("/portal?reason=no_token");
 
   const result = verifyMagicLink(token, "invite");
   if (!result.valid) {
     const reason = result.reason === "expired" ? "expired" : "invalid";
-    return redirectTo(req, `/portal?reason=${reason}`);
+    return relativeRedirect(`/portal?reason=${reason}`);
   }
 
   const { data: contact } = await getSupabaseAdmin()
@@ -26,8 +23,8 @@ export async function GET(req: NextRequest) {
     .eq("id", result.payload.sub)
     .maybeSingle();
 
-  if (!contact) return redirectTo(req, "/portal?reason=invalid");
+  if (!contact) return relativeRedirect("/portal?reason=invalid");
 
   await setPortalSession(result.payload.sub, result.payload.meta);
-  return redirectTo(req, "/portal/dashboard");
+  return relativeRedirect("/portal/dashboard");
 }

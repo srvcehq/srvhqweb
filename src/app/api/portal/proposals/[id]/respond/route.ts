@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPortalSession } from "@/lib/portal-session";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
+import { relativeRedirect } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,7 +16,7 @@ export async function POST(
 ) {
   const session = await getPortalSession();
   if (!session) {
-    return NextResponse.redirect(new URL("/portal", request.url), 303);
+    return relativeRedirect("/portal");
   }
 
   const limit = checkRateLimit(
@@ -77,8 +78,5 @@ export async function POST(
     );
   }
 
-  return NextResponse.redirect(
-    new URL(`/portal/proposals/${bid.id}?responded=${action}`, request.url),
-    303
-  );
+  return relativeRedirect(`/portal/proposals/${bid.id}?responded=${action}`);
 }

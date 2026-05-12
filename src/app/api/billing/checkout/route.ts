@@ -3,7 +3,7 @@ import { stripe } from "@/lib/stripe";
 import { getServerEnv, publicEnv } from "@/lib/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getBilling, patchBillingById } from "@/lib/billing";
-import { getCompanySettings } from "@/lib/company-settings";
+import { getCompanySettings, getCurrentCompanyId } from "@/lib/company-settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,7 +28,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const settings = await getCompanySettings();
+  const companyId = await getCurrentCompanyId();
+  const settings = companyId ? await getCompanySettings(companyId) : null;
   if (!settings) {
     return NextResponse.json(
       { error: "Company settings row missing — finish onboarding first" },

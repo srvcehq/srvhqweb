@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { upsertCompanySettings } from "@/lib/company-settings";
+import {
+  getCurrentCompanyId,
+  provisionCompany,
+  upsertCompanySettings,
+} from "@/lib/company-settings";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -22,38 +27,44 @@ function emptyToNull(v: string | undefined): string | null {
 }
 
 export async function POST(request: NextRequest) {
-  const limit = checkRateLimit(
-    `onboarding-biz:${getClientIp(request)}`,
-    CAPACITY,
-    WINDOW_MS
-  );
+  const limit = checkRateLimit(`onboarding-biz:${getClientIp(request)}`, CAPACITY, WINDOW_MS);
   if (!limit.ok) return rateLimitResponse(limit);
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   let parsed;
   try {
     parsed = bodySchema.parse(await request.json());
   } catch (err) {
     return NextResponse.json(
-      {
-        error: "Invalid input",
-        details: err instanceof z.ZodError ? err.issues : undefined,
-      },
+      { error: "Invalid input", details: err instanceof z.ZodError ? err.issues : undefined },
       { status: 400 }
     );
   }
 
-  const result = await upsertCompanySettings({
+  const fields = {
     company_name: parsed.company_name,
     business_phone: emptyToNull(parsed.business_phone),
     business_address: emptyToNull(parsed.business_address),
-  });
+  };
 
-  if (!result.ok) {
-    console.error("[onboarding/business-info] upsert error", result.error);
-    return NextResponse.json(
-      { error: "Failed to save business info" },
-      { status: 500 }
-    );
+  const companyId = await getCurrentCompanyId();
+  if (companyId) {
+    const result = await upsertCompanySettings(companyId, fields);
+    if (!result.ok) {
+      console.error("[onboarding/business-info] update error", result.error);
+      return NextResponse.json({ error: "Failed to save business info" }, { status: 500 });
+    }
+  } else {
+    const result = await provisionCompany(user.id, fields);
+    if (!result.ok) {
+      console.error("[onboarding/business-info] provision error", result.error);
+      return NextResponse.json({ error: "Failed to save business info" }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ ok: true });

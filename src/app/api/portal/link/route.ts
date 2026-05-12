@@ -13,7 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildClientInviteUrl, buildClientLoginUrl } from "@/lib/magic-links";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentCompanyId } from "@/lib/company-settings";
 import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -23,16 +23,14 @@ export async function GET(request: NextRequest) {
   const limit = checkRateLimit(`portal-link:${getClientIp(request)}`, 30, 60_000);
   if (!limit.ok) return rateLimitResponse(limit);
 
-  // Require a signed-in contractor.
+  // Require a signed-in contractor who actually has a company.
+  let companyId: string | null = null;
   try {
-    const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    companyId = await getCurrentCompanyId();
   } catch {
+    companyId = null;
+  }
+  if (!companyId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -45,13 +43,14 @@ export async function GET(request: NextRequest) {
 
   const { data: contact, error } = await getSupabaseAdmin()
     .from("contacts")
-    .select("id")
+    .select("id, company_id")
     .eq("id", contactId)
     .maybeSingle();
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  if (!contact) {
+  // Must exist AND belong to the caller's company.
+  if (!contact || (contact as { company_id?: string }).company_id !== companyId) {
     return NextResponse.json({ error: "Contact not found" }, { status: 404 });
   }
 

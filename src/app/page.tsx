@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
-import { getCompanySettings } from "@/lib/company-settings";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
-  const settings = await getCompanySettings();
-  redirect(settings?.onboarding_completed_at ? "/dashboard" : "/onboarding");
+// Anyone reaching "/" has already passed the auth + onboarding + billing gate
+// in middleware (no company -> /onboarding, no active sub -> /billing/locked),
+// so just send them to the dashboard.
+export default function Home() {
+  redirect("/dashboard");
 }

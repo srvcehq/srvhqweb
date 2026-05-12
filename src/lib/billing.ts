@@ -1,5 +1,6 @@
 import "server-only";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type StripeSubscriptionStatus =
   | "trialing"
@@ -36,13 +37,15 @@ export function isActiveStatus(
 }
 
 /**
- * Returns the company's billing row, or null if the migration hasn't been
- * applied yet (PostgREST 42703 = column does not exist). The middleware
- * treats either null or an inactive status as "not subscribed".
+ * Returns the signed-in user's company billing row, or null if they have no
+ * company yet / the billing columns aren't there. Uses the user-scoped client
+ * so RLS scopes it to their own company. The middleware treats either null or
+ * an inactive status as "not subscribed".
  */
 export async function getBilling(): Promise<BillingRow | null> {
   try {
-    const { data, error } = await getSupabaseAdmin()
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase
       .from("company_settings")
       .select(SELECT)
       .maybeSingle();

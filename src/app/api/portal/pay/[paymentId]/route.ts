@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { publicEnv } from "@/lib/env";
 import { getPortalSession } from "@/lib/portal-session";
 import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
+import { relativeRedirect } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +20,7 @@ export async function POST(
 ) {
   const session = await getPortalSession();
   if (!session) {
-    return NextResponse.redirect(new URL("/portal", request.url), 303);
+    return relativeRedirect("/portal");
   }
 
   const limit = checkRateLimit(
@@ -36,7 +37,7 @@ export async function POST(
   const { data: paymentRow, error: paymentErr } = await supabase
     .from("payments")
     .select(
-      "id, contact_id, amount, status, description, type, stripe_payment_intent_id"
+      "id, contact_id, company_id, amount, status, description, type, stripe_payment_intent_id"
     )
     .eq("id", paymentId)
     .maybeSingle();
@@ -48,6 +49,7 @@ export async function POST(
   const payment = paymentRow as {
     id: string;
     contact_id: string;
+    company_id: string;
     amount: number | string;
     status: string;
     description: string | null;
@@ -68,13 +70,13 @@ export async function POST(
     );
   }
 
-  // Resolve the contractor's connected Stripe account + the contact's
-  // saved-customer ID (so we can reuse cards on subsequent payments).
+  // Resolve the contractor's connected Stripe account (scoped to the payment's
+  // company) + the contact's saved-customer ID (so we can reuse cards next time).
   const [{ data: settingsRow }, { data: contactRow }] = await Promise.all([
     supabase
       .from("company_settings")
       .select("stripe_connect_account_id, stripe_connect_status")
-      .limit(1)
+      .eq("id", payment.company_id)
       .maybeSingle(),
     supabase
       .from("contacts")

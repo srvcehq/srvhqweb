@@ -3,7 +3,7 @@ import { z } from "zod";
 import { stripe } from "@/lib/stripe";
 import { publicEnv } from "@/lib/env";
 import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
-import { upsertCompanySettings } from "@/lib/company-settings";
+import { getCurrentCompanyId, upsertCompanySettings } from "@/lib/company-settings";
 
 export const runtime = "nodejs";
 
@@ -11,7 +11,6 @@ const CONNECT_CAPACITY = 3;
 const CONNECT_WINDOW_MS = 60_000;
 
 const bodySchema = z.object({
-  companyId: z.string().min(1),
   email: z.string().email().optional(),
   country: z.string().length(2).default("US"),
   existingAccountId: z.string().optional(),
@@ -21,6 +20,14 @@ const bodySchema = z.object({
 export async function POST(request: NextRequest) {
   const limit = checkRateLimit(`connect:${getClientIp(request)}`, CONNECT_CAPACITY, CONNECT_WINDOW_MS);
   if (!limit.ok) return rateLimitResponse(limit);
+
+  const companyId = await getCurrentCompanyId();
+  if (!companyId) {
+    return NextResponse.json(
+      { error: "Set up your business info first." },
+      { status: 400 }
+    );
+  }
 
   let parsed;
   try {
@@ -44,11 +51,11 @@ export async function POST(request: NextRequest) {
           transfers: { requested: true },
         },
         business_type: "company",
-        metadata: { company_id: parsed.companyId },
+        metadata: { company_id: companyId },
       });
       accountId = account.id;
       // Persist immediately so a refresh mid-flow doesn't lose the account ID.
-      await upsertCompanySettings({
+      await upsertCompanySettings(companyId, {
         stripe_connect_account_id: accountId,
         stripe_connect_status: "pending",
       });

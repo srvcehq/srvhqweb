@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BrandMark } from "@/components/brand/brand-logo";
+import { AddressAutocomplete } from "@/components/shared/address-autocomplete";
 import { toast } from "sonner";
 
 const TOTAL_STEPS = 5;
@@ -304,13 +305,11 @@ function BusinessInfoStep({
           >
             Business Address
           </Label>
-          <Input
+          <AddressAutocomplete
             id="biz-address"
-            placeholder="123 Main St, Denver, CO 80202"
+            placeholder="Start typing your address…"
             value={value.business_address}
-            onChange={(e) =>
-              onChange({ ...value, business_address: e.target.value })
-            }
+            onChange={(v) => onChange({ ...value, business_address: v })}
             className="mt-1 border-gray-200 focus:border-green-500"
           />
         </div>

@@ -10,7 +10,7 @@ import { patchBillingByCustomerId, type StripeSubscriptionStatus } from "@/lib/b
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const COMPANY_NAME_FALLBACK = "TerraFlow";
+const COMPANY_NAME_FALLBACK = "SRVCE HQ";
 
 type PaymentStatus =
   | "unpaid"

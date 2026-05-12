@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { Sprout } from "lucide-react";
 import { publicEnv } from "@/lib/env";
+import { BrandMark } from "@/components/brand/brand-logo";
 import LoginForm from "./login-form";
 
 export const dynamic = "force-dynamic";
@@ -14,11 +14,11 @@ export default async function LoginPage({
   return (
     <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-2 duration-500">
       <div className="flex flex-col items-center mb-6">
-        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-green-500/20 mb-4">
-          <Sprout className="w-7 h-7 text-white" />
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-black/5 mb-4 dark:bg-zinc-100">
+          <BrandMark size={32} />
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          Welcome to TerraFlow
+          Welcome to SRVCE HQ
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
           Sign in to your business account

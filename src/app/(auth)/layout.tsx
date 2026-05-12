@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "TerraFlow — Sign in",
+  title: "SRVCE HQ — Sign in",
 };
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {

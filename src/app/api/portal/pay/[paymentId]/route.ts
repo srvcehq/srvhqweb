@@ -150,7 +150,7 @@ export async function POST(
   }
 
   const platformFee = calculatePlatformFee(amountCents);
-  const description = payment.description?.trim() || "TerraFlow service";
+  const description = payment.description?.trim() || "SRVCE HQ service";
 
   try {
     const checkout = await stripe().checkout.sessions.create({

@@ -817,9 +817,9 @@ export default function SchedulePage() {
                         size="sm"
                         onClick={() => {
                           navigator.clipboard.writeText(
-                            `https://pay.terraflow.com/v/${detailVisit.id}`
+                            `${window.location.origin}/portal`
                           );
-                          toast.success("Payment link copied.");
+                          toast.success("Portal link copied. Use “Send Pay Link” to text/email the client a one-click pay link.");
                         }}
                       >
                         <Copy className="w-3.5 h-3.5 mr-1.5" />

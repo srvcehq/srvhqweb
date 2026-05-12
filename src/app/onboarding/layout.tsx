@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Welcome to TerraFlow",
+  title: "Welcome to SRVCE HQ",
   description: "Let's get your account set up.",
 };
 

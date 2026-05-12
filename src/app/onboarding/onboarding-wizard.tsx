@@ -9,12 +9,12 @@ import {
   Users,
   LayoutDashboard,
   ChevronLeft,
-  Sprout,
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { BrandMark } from "@/components/brand/brand-logo";
 import { toast } from "sonner";
 
 const TOTAL_STEPS = 5;
@@ -188,11 +188,11 @@ function BackButton({ onBack }: { onBack: () => void }) {
 function WelcomeStep({ onNext }: { onNext: () => void }) {
   return (
     <div className="flex flex-col items-center text-center py-2">
-      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-green-500/20 mb-4">
-        <Sprout className="w-7 h-7 text-white" />
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-black/5 mb-4">
+        <BrandMark size={32} />
       </div>
       <h1 className="text-2xl font-bold text-gray-900 mb-2 tracking-tight">
-        Welcome to TerraFlow
+        Welcome to SRVCE HQ
       </h1>
       <p className="text-gray-600 text-sm max-w-sm mb-7 leading-relaxed">
         Your all-in-one field service platform. Let&apos;s get your account set
@@ -422,7 +422,7 @@ function ConnectStripeStep({
             <div className="text-3xl mb-3">💳</div>
             <p className="text-gray-600 text-sm mb-4 max-w-xs mx-auto leading-relaxed">
               Connect your Stripe account to accept deposits, invoices, and
-              maintenance payments directly through TerraFlow.
+              maintenance payments directly through SRVCE HQ.
             </p>
             {cancelledStripe && (
               <p className="text-amber-700 text-xs mb-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -494,7 +494,7 @@ function FirstCustomerStep({
             Add your first customer
           </h2>
           <p className="text-gray-500 text-sm mt-1.5 max-w-sm leading-relaxed">
-            Your contacts are the heart of TerraFlow — add a customer to get
+            Your contacts are the heart of SRVCE HQ — add a customer to get
             started with bids, projects, and maintenance plans.
           </p>
         </div>
@@ -536,7 +536,7 @@ function DoneStep({
           You&apos;re all set! 🎉
         </h2>
         <p className="text-gray-500 text-sm mt-1.5 max-w-sm leading-relaxed">
-          Your TerraFlow account is ready to go. Head to your dashboard to see
+          Your SRVCE HQ account is ready to go. Head to your dashboard to see
           what&apos;s happening.
         </p>
       </div>

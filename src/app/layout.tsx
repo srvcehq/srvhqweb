@@ -10,7 +10,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "TerraFlow - Landscaping Business Management",
+  title: "SRVCE HQ — Landscaping Business Management",
   description:
     "Complete business management platform for landscaping companies. Manage clients, bids, schedules, maintenance plans, and finances.",
 };

@@ -39,7 +39,7 @@ const DEFAULT_PERMISSIONS: Permissions = {
 
 const MOCK_USER: User = {
   id: "user-1",
-  email: "admin@terraflow.app",
+  email: "admin@srvcehq.com",
   full_name: "Admin User",
   role: "admin",
 };

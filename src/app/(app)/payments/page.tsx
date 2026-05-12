@@ -180,7 +180,7 @@ export default function PaymentsPage() {
     const result = await createCheckoutSession({
       connectedAccountId: stripeAccountId!,
       amountCents: dollarsToCents(payment.amount),
-      description: payment.description || "TerraFlow service",
+      description: payment.description || "SRVCE HQ service",
       paymentId: payment.id,
       customerEmail: contact?.email,
       contactId: payment.contact_id,

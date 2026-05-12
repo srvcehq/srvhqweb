@@ -1,5 +1,5 @@
-import { Sprout } from "lucide-react";
 import { getBilling } from "@/lib/billing";
+import { BrandMark } from "@/components/brand/brand-logo";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +11,7 @@ const STATUS_COPY: Record<string, { title: string; body: string; cta: string }> 
   },
   canceled: {
     title: "Subscription canceled",
-    body: "Your subscription was canceled. Resubscribe to get back into TerraFlow.",
+    body: "Your subscription was canceled. Resubscribe to get back into SRVCE HQ.",
     cta: "Resubscribe",
   },
   incomplete: {
@@ -32,8 +32,8 @@ const STATUS_COPY: Record<string, { title: string; body: string; cta: string }> 
 };
 
 const DEFAULT_COPY = {
-  title: "Subscribe to TerraFlow",
-  body: "Get access to the full TerraFlow contractor app — bids, scheduling, payments, and more.",
+  title: "Subscribe to SRVCE HQ",
+  body: "Get access to the full SRVCE HQ contractor app — bids, scheduling, payments, and more.",
   cta: "Start subscription",
 };
 
@@ -47,10 +47,10 @@ export default async function BillingLockedPage() {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-6">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white">
-          <Sprout className="w-5 h-5" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-black/5">
+          <BrandMark size={24} />
         </div>
-        <div className="font-semibold text-lg">TerraFlow</div>
+        <div className="font-semibold text-lg tracking-tight">SRVCE HQ</div>
       </div>
 
       <div className="space-y-2">

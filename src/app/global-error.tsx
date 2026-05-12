@@ -41,8 +41,15 @@ export default function GlobalError({
             padding: "1.75rem",
           }}
         >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/srvce-mark.png"
+            alt="SRVCE HQ"
+            height={22}
+            style={{ display: "block", height: "22px", width: "auto", marginBottom: "0.75rem" }}
+          />
           <h1 style={{ fontSize: "1.125rem", fontWeight: 600, margin: 0 }}>
-            TerraFlow hit a problem
+            SRVCE HQ hit a problem
           </h1>
           <p
             style={{

@@ -11,7 +11,7 @@ export function stripe(): Stripe {
     apiVersion: "2026-04-22.dahlia",
     typescript: true,
     appInfo: {
-      name: "TerraFlow",
+      name: "SRVCE HQ",
       version: "0.1.0",
     },
   });

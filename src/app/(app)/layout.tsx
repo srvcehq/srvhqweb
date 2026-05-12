@@ -17,7 +17,7 @@ import {
   FileText,
   FolderKanban,
   Settings,
-  Sprout,
+  Tags,
   Menu,
   LogOut,
   DollarSign,
@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 
 import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { BrandMark } from "@/components/brand/brand-logo";
 import {
   Sidebar,
   SidebarContent,
@@ -115,7 +116,7 @@ const allNavigationItems: NavItem[] = [
   {
     title: "Bid Items",
     url: routes.bidItems,
-    icon: Sprout,
+    icon: Tags,
     permission: PERMISSIONS.VIEW_BID_ITEMS,
   },
   {
@@ -297,14 +298,14 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
         >
           <SidebarHeader className="border-b border-sidebar-border-green p-6 group-data-[collapsible=icon]:p-4">
             <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
-              <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
-                <Sprout className="w-6 h-6 text-white" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-black/5 flex-shrink-0 dark:bg-zinc-100">
+                <BrandMark size={26} />
               </div>
               <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-                <h2 className="font-bold text-foreground text-lg whitespace-nowrap overflow-hidden text-ellipsis">
-                  TerraFlow
+                <h2 className="font-bold text-foreground text-lg tracking-tight whitespace-nowrap overflow-hidden text-ellipsis">
+                  SRVCE HQ
                 </h2>
-                <p className="text-xs text-green-600 whitespace-nowrap overflow-hidden text-ellipsis">
+                <p className="text-xs text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">
                   Business Management
                 </p>
               </div>
@@ -403,9 +404,12 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
                 <SidebarTrigger className="hover:bg-accent p-2 rounded-lg transition-colors duration-200 -ml-2">
                   <Menu className="w-5 h-5" />
                 </SidebarTrigger>
-                <h1 className="text-xl font-bold text-foreground md:hidden">
-                  TerraFlow
-                </h1>
+                <div className="flex items-center gap-2 md:hidden">
+                  <BrandMark size={20} />
+                  <h1 className="text-xl font-bold tracking-tight text-foreground">
+                    SRVCE HQ
+                  </h1>
+                </div>
               </div>
               <ThemeToggle />
             </div>

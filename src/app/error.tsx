@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { AlertTriangle, RotateCcw, Sprout } from "lucide-react";
+import { AlertTriangle, RotateCcw } from "lucide-react";
+import { BrandMark } from "@/components/brand/brand-logo";
 
 export default function AppError({
   error,
@@ -19,11 +20,11 @@ export default function AppError({
     <div className="min-h-[70vh] flex items-center justify-center bg-gray-50 px-4 py-12">
       <div className="w-full max-w-md rounded-2xl border border-gray-100 bg-white p-7 shadow-xl">
         <div className="mb-5 flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#1B4332] to-[#2D6A4F] text-white">
-            <Sprout className="h-4 w-4" />
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white shadow-sm ring-1 ring-black/5">
+            <BrandMark size={18} />
           </span>
           <span className="text-sm font-semibold tracking-tight text-gray-900">
-            TerraFlow
+            SRVCE HQ
           </span>
         </div>
 

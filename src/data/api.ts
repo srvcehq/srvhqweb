@@ -1,11 +1,9 @@
 /**
  * `db` — entity stores backed by Supabase.
  *
- * Mirrors the original MockEntityStore API (list/filter/get/create/update/
- * delete/bulkCreate) so consumers don't need to change.
- *
- * The mock store is preserved at src/data/store.ts and src/data/mock/* for
- * the seed endpoint (/api/dev/seed) to load demo data on a fresh DB.
+ * Each entity exposes list/filter/get/create/update/delete/bulkCreate. Tenant
+ * scoping is enforced by Postgres RLS (every per-tenant table has a
+ * `company_id` filtered by `auth_company_id()`), so callers don't pass it.
  */
 
 import { SupabaseEntityStore } from "@/lib/supabase/entity-store";

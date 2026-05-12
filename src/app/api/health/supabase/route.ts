@@ -25,7 +25,14 @@ export async function GET() {
         const { count, error } = await supabase
           .from(table)
           .select("*", { count: "exact", head: true });
-        return { table, count: count ?? 0, error: error?.message ?? null };
+        // A HEAD request carries no response body, so an auth/permission failure
+        // (e.g. a bad SUPABASE_SERVICE_ROLE_KEY) can come back with an empty
+        // error message — treat a null count as a failure too so we don't
+        // falsely report "ok".
+        const errMsg =
+          (error?.message && error.message.length > 0 ? error.message : null) ??
+          (count == null ? "no row count returned — likely an auth/permission error" : null);
+        return { table, count: count ?? 0, error: errMsg };
       })
     );
 

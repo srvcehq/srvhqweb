@@ -5,6 +5,38 @@ import { APIProvider, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { Input } from "@/components/ui/input";
 import { publicEnv } from "@/lib/env";
 
+/** Pull the useful bits out of a Google Places PlaceResult. */
+export function parsePlaceComponents(place: google.maps.places.PlaceResult): {
+  address_line1: string;
+  city: string;
+  state: string;
+  zip: string;
+  latitude?: number;
+  longitude?: number;
+  formatted: string;
+} {
+  const comps = place.address_components ?? [];
+  const get = (type: string, short = false) => {
+    const c = comps.find((x) => x.types.includes(type));
+    return c ? (short ? c.short_name : c.long_name) : "";
+  };
+  const line1 = [get("street_number"), get("route")].filter(Boolean).join(" ").trim();
+  const city =
+    get("locality") ||
+    get("postal_town") ||
+    get("sublocality") ||
+    get("administrative_area_level_2");
+  return {
+    address_line1: line1,
+    city,
+    state: get("administrative_area_level_1", true),
+    zip: get("postal_code"),
+    latitude: place.geometry?.location?.lat(),
+    longitude: place.geometry?.location?.lng(),
+    formatted: place.formatted_address ?? "",
+  };
+}
+
 type Props = {
   id?: string;
   value: string;

@@ -15,7 +15,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BrandMark } from "@/components/brand/brand-logo";
-import { AddressAutocomplete } from "@/components/shared/address-autocomplete";
+import { AddressAutocomplete, parsePlaceComponents } from "@/components/shared/address-autocomplete";
+import { PhoneInput } from "@/components/shared/phone-input";
+import { db } from "@/data/api";
 import { toast } from "sonner";
 
 const TOTAL_STEPS = 5;
@@ -58,10 +60,6 @@ export default function OnboardingWizard({
 
   const next = () => setStep((s) => Math.min(s + 1, TOTAL_STEPS));
   const back = () => setStep((s) => Math.max(s - 1, 1));
-
-  const handleGoToContacts = () => {
-    router.push("/contacts?from=onboarding");
-  };
 
   const handleDone = () => {
     startCompleting(async () => {
@@ -106,13 +104,7 @@ export default function OnboardingWizard({
             stripeStatusFromUrl={stripeStatusFromUrl}
           />
         )}
-        {step === 4 && (
-          <FirstCustomerStep
-            onNext={next}
-            onBack={back}
-            onGoToContacts={handleGoToContacts}
-          />
-        )}
+        {step === 4 && <FirstCustomerStep onNext={next} onBack={back} />}
         {step === 5 && (
           <DoneStep onDone={handleDone} isCompleting={isCompleting} />
         )}
@@ -288,13 +280,10 @@ function BusinessInfoStep({
           >
             Phone Number
           </Label>
-          <Input
+          <PhoneInput
             id="biz-phone"
-            placeholder="(555) 555-5555"
             value={value.business_phone}
-            onChange={(e) =>
-              onChange({ ...value, business_phone: e.target.value })
-            }
+            onChange={(v) => onChange({ ...value, business_phone: v })}
             className="mt-1 border-gray-200 focus:border-green-500"
           />
         </div>
@@ -475,41 +464,158 @@ function ConnectStripeStep({
 function FirstCustomerStep({
   onNext,
   onBack,
-  onGoToContacts,
 }: {
   onNext: () => void;
   onBack: () => void;
-  onGoToContacts: () => void;
 }) {
+  const [c, setC] = useState({
+    first_name: "",
+    last_name: "",
+    email: "",
+    phone: "",
+    address_line1: "",
+    city: "",
+    state: "",
+    zip: "",
+    latitude: undefined as number | undefined,
+    longitude: undefined as number | undefined,
+  });
+  const [saving, setSaving] = useState(false);
+  const canSubmit = c.first_name.trim().length > 0 && !saving;
+
+  async function addCustomer() {
+    setSaving(true);
+    try {
+      await db.Contact.create({
+        first_name: c.first_name.trim(),
+        last_name: c.last_name.trim(),
+        email: c.email.trim() || undefined,
+        phone: c.phone.trim() || undefined,
+        address_line1: c.address_line1.trim() || undefined,
+        city: c.city.trim() || undefined,
+        state: c.state.trim() || undefined,
+        zip: c.zip.trim() || undefined,
+        latitude: c.latitude,
+        longitude: c.longitude,
+        contact_type: "residential",
+      });
+      toast.success("Customer added");
+      onNext();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't add the customer.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <BackButton onBack={onBack} />
-      <div className="flex flex-col items-center text-center gap-4 py-2">
-        <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
-          <Users className="w-5 h-5 text-amber-600" />
+      <div className="flex items-center gap-3 mb-1">
+        <div className="w-9 h-9 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+          <Users className="w-4 h-4 text-amber-600" />
         </div>
         <div>
-          <h2 className="text-lg font-bold text-gray-900">
-            Add your first customer
-          </h2>
-          <p className="text-gray-500 text-sm mt-1.5 max-w-sm leading-relaxed">
-            Your contacts are the heart of SRVCE HQ — add a customer to get
-            started with bids, projects, and maintenance plans.
-          </p>
+          <h2 className="text-lg font-bold text-gray-900">Add your first customer</h2>
+          <p className="text-xs text-gray-500">Optional — you can add more anytime</p>
         </div>
-        <Button
-          onClick={onGoToContacts}
-          className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-8 shadow-sm font-medium"
-        >
-          Go to Contacts
-        </Button>
-        <button
-          onClick={onNext}
-          className="text-xs text-gray-400 hover:text-gray-500 transition-colors"
-        >
-          I&apos;ll do this later
-        </button>
       </div>
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label htmlFor="cust-first" className="text-sm font-medium text-gray-700">
+              First Name
+            </Label>
+            <Input
+              id="cust-first"
+              placeholder="Jane"
+              value={c.first_name}
+              onChange={(e) => setC({ ...c, first_name: e.target.value })}
+              className="mt-1 border-gray-200 focus:border-green-500"
+            />
+          </div>
+          <div>
+            <Label htmlFor="cust-last" className="text-sm font-medium text-gray-700">
+              Last Name
+            </Label>
+            <Input
+              id="cust-last"
+              placeholder="Doe"
+              value={c.last_name}
+              onChange={(e) => setC({ ...c, last_name: e.target.value })}
+              className="mt-1 border-gray-200 focus:border-green-500"
+            />
+          </div>
+        </div>
+        <div>
+          <Label htmlFor="cust-email" className="text-sm font-medium text-gray-700">
+            Email
+          </Label>
+          <Input
+            id="cust-email"
+            type="email"
+            placeholder="jane@example.com"
+            value={c.email}
+            onChange={(e) => setC({ ...c, email: e.target.value })}
+            className="mt-1 border-gray-200 focus:border-green-500"
+          />
+        </div>
+        <div>
+          <Label htmlFor="cust-phone" className="text-sm font-medium text-gray-700">
+            Phone
+          </Label>
+          <PhoneInput
+            id="cust-phone"
+            value={c.phone}
+            onChange={(v) => setC({ ...c, phone: v })}
+            className="mt-1 border-gray-200 focus:border-green-500"
+          />
+        </div>
+        <div>
+          <Label htmlFor="cust-address" className="text-sm font-medium text-gray-700">
+            Address
+          </Label>
+          <AddressAutocomplete
+            id="cust-address"
+            placeholder="Start typing an address…"
+            value={c.address_line1}
+            onChange={(v) => setC((prev) => ({ ...prev, address_line1: v }))}
+            onPlace={(place) => {
+              const p = parsePlaceComponents(place);
+              setC((prev) => ({
+                ...prev,
+                address_line1: p.address_line1 || p.formatted || prev.address_line1,
+                city: p.city || prev.city,
+                state: p.state || prev.state,
+                zip: p.zip || prev.zip,
+                latitude: p.latitude ?? prev.latitude,
+                longitude: p.longitude ?? prev.longitude,
+              }));
+            }}
+            className="mt-1 border-gray-200 focus:border-green-500"
+          />
+        </div>
+      </div>
+      <Button
+        onClick={addCustomer}
+        disabled={!canSubmit}
+        className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white mt-1 shadow-sm font-medium disabled:opacity-60"
+      >
+        {saving ? (
+          <>
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            Adding...
+          </>
+        ) : (
+          "Add Customer"
+        )}
+      </Button>
+      <button
+        onClick={onNext}
+        className="text-xs text-gray-400 hover:text-gray-500 text-center -mt-1 transition-colors"
+      >
+        Skip for now
+      </button>
     </div>
   );
 }

@@ -116,6 +116,25 @@ export default function PaymentsPage() {
   const { currentCompanyId } = useCompany();
   const queryClient = useQueryClient();
 
+  // "Manage Payments" — open the contractor's Stripe Express dashboard.
+  const [openingDashboard, setOpeningDashboard] = useState(false);
+  async function openStripeDashboard() {
+    setOpeningDashboard(true);
+    try {
+      const res = await fetch("/api/stripe/dashboard", { method: "POST" });
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (res.ok && data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      toast.error(data.error ?? "Couldn't open your Stripe dashboard.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't open your Stripe dashboard.");
+    } finally {
+      setOpeningDashboard(false);
+    }
+  }
+
   // Filters
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -385,13 +404,27 @@ export default function PaymentsPage() {
               Track all payment activity and transactions
             </p>
           </div>
-          <Button
-            onClick={() => setShowInvoiceDialog(true)}
-            className="bg-green-600 hover:bg-green-700 text-white"
-          >
-            <FileText className="w-4 h-4 mr-2" />
-            Send Invoice
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={openStripeDashboard}
+              disabled={openingDashboard}
+            >
+              {openingDashboard ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <ExternalLink className="w-4 h-4 mr-2" />
+              )}
+              Manage Payments
+            </Button>
+            <Button
+              onClick={() => setShowInvoiceDialog(true)}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              Send Invoice
+            </Button>
+          </div>
         </div>
 
         {/* Summary Cards */}

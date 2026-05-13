@@ -25,6 +25,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Home, Building2, ArrowLeft, ArrowRight } from "lucide-react";
 import { useCompany } from "@/providers/company-provider";
+import { AddressAutocomplete, parsePlaceComponents } from "@/components/shared/address-autocomplete";
+import { PhoneInput } from "@/components/shared/phone-input";
 import { toast } from "sonner";
 import type { Contact } from "@/data/types";
 
@@ -65,6 +67,8 @@ export default function CreateContactDialog({
     city: (prefillData.city as string) || "",
     state: (prefillData.state as string) || "",
     zip: (prefillData.zip as string) || "",
+    latitude: (prefillData.latitude as number | undefined) ?? (undefined as number | undefined),
+    longitude: (prefillData.longitude as number | undefined) ?? (undefined as number | undefined),
     notes: (prefillData.notes as string) || "",
     company_name: "",
     contact_type: "residential" as "residential" | "commercial",
@@ -337,21 +341,32 @@ export default function CreateContactDialog({
 
             <div className="space-y-2">
               <Label htmlFor="phone">Phone</Label>
-              <Input
+              <PhoneInput
                 id="phone"
-                type="tel"
                 value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                onChange={(v) => setFormData({ ...formData, phone: v })}
               />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="address_line1">Street Address</Label>
-              <Input
+              <AddressAutocomplete
                 id="address_line1"
                 value={formData.address_line1}
-                onChange={(e) => setFormData({ ...formData, address_line1: e.target.value })}
-                placeholder="Enter street address"
+                onChange={(v) => setFormData((prev) => ({ ...prev, address_line1: v }))}
+                onPlace={(place) => {
+                  const p = parsePlaceComponents(place);
+                  setFormData((prev) => ({
+                    ...prev,
+                    address_line1: p.address_line1 || p.formatted || prev.address_line1,
+                    city: p.city || prev.city,
+                    state: p.state || prev.state,
+                    zip: p.zip || prev.zip,
+                    latitude: p.latitude ?? prev.latitude,
+                    longitude: p.longitude ?? prev.longitude,
+                  }));
+                }}
+                placeholder="Start typing an address…"
               />
             </div>
 

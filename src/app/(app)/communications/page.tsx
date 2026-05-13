@@ -162,7 +162,8 @@ function formatFullDateTime(dateStr: string) {
 /* ------------------------------------------------------------------ */
 
 export default function CommunicationsPage() {
-  const { currentCompanyId } = useCompany();
+  const { currentCompanyId, currentCompany } = useCompany();
+  const brandName = currentCompany?.name || "Your business";
 
   const [communications, setCommunications] = useState<Communication[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -531,23 +532,11 @@ export default function CommunicationsPage() {
                   </div>
 
                   <p className="text-[11px] text-muted-foreground truncate">
-                    {replyChannel === "sms" ? (
-                      <>
-                        Sending as{" "}
-                        <span className="font-medium text-foreground">
-                          Text Message
-                        </span>
-                        {" \u2022 From: (385) 555-1234"}
-                      </>
-                    ) : (
-                      <>
-                        Sending as{" "}
-                        <span className="font-medium text-foreground">
-                          Email
-                        </span>
-                        {" \u2022 From: contractor@greenvalley.com"}
-                      </>
-                    )}
+                    Sending as{" "}
+                    <span className="font-medium text-foreground">{brandName}</span>
+                    {replyChannel === "sms"
+                      ? " \u2022 via text message"
+                      : " \u2022 via email"}
                   </p>
                 </div>
 

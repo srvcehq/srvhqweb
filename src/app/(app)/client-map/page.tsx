@@ -14,6 +14,7 @@ import { useCompany } from "@/providers/company-provider";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { MapErrorBoundary } from "@/components/shared/map-error-boundary";
 import {
   MapPin,
   Phone,
@@ -123,10 +124,14 @@ function ClientMapContent({
   }, [map, selectedContact, markers]);
 
   useEffect(() => {
-    if (!map || markers.length === 0) return;
-    const bounds = new google.maps.LatLngBounds();
-    markers.forEach((m) => bounds.extend(m.coords));
-    map.fitBounds(bounds, 80);
+    try {
+      if (!map || markers.length === 0 || typeof google === "undefined" || !google.maps?.LatLngBounds) return;
+      const bounds = new google.maps.LatLngBounds();
+      markers.forEach((m) => bounds.extend(m.coords));
+      map.fitBounds(bounds, 80);
+    } catch (e) {
+      console.error("[client-map] fitBounds failed", e);
+    }
   }, [map, markers.length]);
 
   const totalAddressed = contacts.filter((c) => formatAddress(c)).length;
@@ -272,13 +277,15 @@ export default function ClientMapPage() {
                     </p>
                   </div>
                 ) : (
-                  <APIProvider apiKey={apiKey} libraries={["geocoding"]}>
-                    <ClientMapContent
-                      contacts={filteredContacts}
-                      selectedContact={selectedContact}
-                      onSelectContact={setSelectedContact}
-                    />
-                  </APIProvider>
+                  <MapErrorBoundary>
+                    <APIProvider apiKey={apiKey} libraries={["geocoding", "marker"]}>
+                      <ClientMapContent
+                        contacts={filteredContacts}
+                        selectedContact={selectedContact}
+                        onSelectContact={setSelectedContact}
+                      />
+                    </APIProvider>
+                  </MapErrorBoundary>
                 )}
               </div>
             </CardContent>

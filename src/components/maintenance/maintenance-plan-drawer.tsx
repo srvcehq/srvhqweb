@@ -24,6 +24,13 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Wrench,
   Calendar,
   CheckCircle2,
@@ -32,7 +39,9 @@ import {
   Trash2,
   Loader2,
   CalendarDays,
+  ChevronDown,
 } from "lucide-react";
+import { useCompany } from "@/providers/company-provider";
 import { toast } from "sonner";
 import {
   DAY_OF_WEEK_LABELS,
@@ -116,6 +125,7 @@ export function MaintenancePlanDrawer({
   onCreated?: () => void;
 }) {
   const queryClient = useQueryClient();
+  const { currentCompanyId } = useCompany();
   const isEdit = !!editPlan;
 
   const [section, setSection] = useState<SectionKey>("basics");
@@ -124,6 +134,52 @@ export function MaintenancePlanDrawer({
   // Plan basics
   const [pickedContactId, setPickedContactId] = useState<string>(contactId ?? "");
   const [planName, setPlanName] = useState("");
+  const [nameMenuOpen, setNameMenuOpen] = useState(false);
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [newNameDraft, setNewNameDraft] = useState("");
+
+  // Saved plan-name templates (company_settings.maintenance_plan_names)
+  const { data: savedPlanNames = [] } = useQuery<string[]>({
+    queryKey: ["plan-name-templates"],
+    queryFn: async () => {
+      try {
+        const rows = await db.CompanySetting.list();
+        return ((rows[0] as { maintenance_plan_names?: string[] } | undefined)
+          ?.maintenance_plan_names ?? []) as string[];
+      } catch {
+        return [];
+      }
+    },
+    enabled: open,
+  });
+
+  async function persistPlanNames(next: string[]) {
+    if (!currentCompanyId) return;
+    try {
+      await db.CompanySetting.update(currentCompanyId, {
+        maintenance_plan_names: next,
+      } as never);
+      queryClient.setQueryData(["plan-name-templates"], next);
+    } catch (err) {
+      // column not migrated yet — keep the chosen name working locally
+      console.warn("[maintenance-plan] couldn't persist plan-name templates", err);
+    }
+  }
+
+  async function addPlanNameTemplate(name: string) {
+    const n = name.trim();
+    if (!n) return;
+    if (!savedPlanNames.includes(n)) await persistPlanNames([...savedPlanNames, n]);
+    setPlanName(n);
+    setShowNameModal(false);
+    setNewNameDraft("");
+    setNameMenuOpen(false);
+  }
+
+  async function deletePlanNameTemplate(name: string) {
+    await persistPlanNames(savedPlanNames.filter((x) => x !== name));
+    if (planName === name) setPlanName("");
+  }
 
   // Schedule
   const [frequency, setFrequency] = useState<MaintenanceFrequency>("weekly");
@@ -460,21 +516,65 @@ export function MaintenancePlanDrawer({
               </div>
             )}
             <div>
-              <Label htmlFor="plan-name" className="text-sm font-medium text-gray-700">Plan Name *</Label>
-              <Input
-                id="plan-name"
-                list="plan-name-options"
-                placeholder="e.g. Weekly Lawn Care"
-                value={planName}
-                onChange={(e) => setPlanName(e.target.value)}
-                className="mt-1"
-              />
-              <datalist id="plan-name-options">
-                {["Weekly Lawn Care", "Bi-Weekly Maintenance", "Monthly Cleanup", "Seasonal Care"].map((n) => (
-                  <option key={n} value={n} />
-                ))}
-              </datalist>
-              <p className="mt-1 text-xs text-gray-500">Give this plan a clear name for easy reference.</p>
+              <Label className="text-sm font-medium text-gray-700">Plan Name *</Label>
+              <div className="relative mt-1">
+                <button
+                  type="button"
+                  onClick={() => setNameMenuOpen((o) => !o)}
+                  className="flex w-full items-center justify-between rounded-md border border-input bg-white px-3 py-2 text-sm"
+                >
+                  <span className={planName ? "text-gray-900" : "text-muted-foreground"}>
+                    {planName || "Select or create plan name…"}
+                  </span>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                </button>
+                {nameMenuOpen && (
+                  <>
+                    {/* click-away */}
+                    <div className="fixed inset-0 z-10" onClick={() => setNameMenuOpen(false)} />
+                    <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-input bg-white shadow-lg">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNameMenuOpen(false);
+                          setNewNameDraft("");
+                          setShowNameModal(true);
+                        }}
+                        className="flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2.5 text-sm font-medium hover:bg-gray-50"
+                      >
+                        <Plus className="h-4 w-4" /> Create new plan name
+                      </button>
+                      {savedPlanNames.length === 0 ? (
+                        <p className="px-3 py-2.5 text-xs text-muted-foreground">No saved plan names yet.</p>
+                      ) : (
+                        savedPlanNames.map((n) => (
+                          <div key={n} className="flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPlanName(n);
+                                setNameMenuOpen(false);
+                              }}
+                              className="flex-1 text-left"
+                            >
+                              {n}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deletePlanNameTemplate(n)}
+                              className="ml-2 text-rose-400 hover:text-rose-600"
+                              aria-label={`Delete ${n}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-gray-500">Give this plan a clear name for easy reference — pick a saved one or create a new one.</p>
             </div>
             <div className="flex justify-end">
               <Button type="button" onClick={() => setSection("schedule")} disabled={!pickedContactId || !planName.trim()}>
@@ -772,6 +872,41 @@ export function MaintenancePlanDrawer({
           </Button>
         </SheetFooter>
       </SheetContent>
+
+      <Dialog open={showNameModal} onOpenChange={setShowNameModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New Plan Name</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 pt-1">
+            <Label htmlFor="new-plan-name" className="text-sm font-medium text-gray-700">Plan Name *</Label>
+            <Input
+              id="new-plan-name"
+              autoFocus
+              placeholder="e.g., Weekly Service, Monthly Cleaning"
+              value={newNameDraft}
+              onChange={(e) => setNewNameDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newNameDraft.trim()) {
+                  e.preventDefault();
+                  void addPlanNameTemplate(newNameDraft);
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setShowNameModal(false)}>Cancel</Button>
+            <Button
+              type="button"
+              onClick={() => void addPlanNameTemplate(newNameDraft)}
+              disabled={!newNameDraft.trim()}
+              className="bg-gray-900 text-white hover:bg-gray-800"
+            >
+              Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Sheet>
   );
 }

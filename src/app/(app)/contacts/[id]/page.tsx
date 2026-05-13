@@ -418,6 +418,13 @@ export default function ContactDetailPage({
 
           <div className="flex items-center gap-2">
             <Button
+              onClick={() => router.push(`${routes.bids}?contactId=${contactId}`)}
+              className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Create Bid
+            </Button>
+            <Button
               onClick={() => setShowMaintenanceDrawer(true)}
               className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white"
             >
@@ -590,27 +597,13 @@ export default function ContactDetailPage({
         {isLead && (
           <Alert className="bg-gradient-to-r from-gray-50 to-gray-100 border-gray-200 dark:from-gray-900/30 dark:to-gray-800/30 dark:border-gray-700">
             <AlertDescription>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Badge className="bg-gray-600 text-white border-0">LEAD</Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    This contact has no active projects or maintenance plans.
-                  </p>
-                </div>
-                <div className="flex gap-2 flex-shrink-0">
-                  <Button
-                    size="sm"
-                    className="bg-gradient-to-r from-blue-500 to-indigo-600"
-                    onClick={() =>
-                      router.push(`${routes.bids}?contactId=${contactId}`)
-                    }
-                  >
-                    <Plus className="w-4 h-4 mr-1" />
-                    Create Bid
-                  </Button>
-                </div>
+              <div className="flex items-center gap-3">
+                <Badge className="bg-gray-600 text-white border-0">LEAD</Badge>
+                <p className="text-sm text-muted-foreground">
+                  This contact has no active projects or maintenance plans yet — use{" "}
+                  <span className="font-medium text-foreground">Create Bid</span> or{" "}
+                  <span className="font-medium text-foreground">Create Maintenance Plan</span> above.
+                </p>
               </div>
             </AlertDescription>
           </Alert>

@@ -12,8 +12,21 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
 import { useCompany } from "@/providers/company-provider";
+import { AddressAutocomplete, parsePlaceComponents } from "@/components/shared/address-autocomplete";
 import { toast } from "sonner";
 import type { Location } from "@/data/types";
+
+const EMPTY_LOCATION = {
+  name: "",
+  address_line1: "",
+  address_line2: "",
+  city: "",
+  state: "",
+  zip: "",
+  latitude: undefined as number | undefined,
+  longitude: undefined as number | undefined,
+  notes: "",
+};
 
 interface CreateLocationDialogProps {
   open: boolean;
@@ -25,20 +38,10 @@ export default function CreateLocationDialog({ open, onOpenChange, contactId }: 
   const queryClient = useQueryClient();
   const { currentCompanyId } = useCompany();
 
-  const [formData, setFormData] = useState({
-    name: "",
-    address_line1: "",
-    address_line2: "",
-    city: "",
-    state: "",
-    zip: "",
-    notes: "",
-  });
+  const [formData, setFormData] = useState({ ...EMPTY_LOCATION });
 
   useEffect(() => {
-    if (open) {
-      setFormData({ name: "", address_line1: "", address_line2: "", city: "", state: "", zip: "", notes: "" });
-    }
+    if (open) setFormData({ ...EMPTY_LOCATION });
   }, [open]);
 
   const createMutation = useMutation({
@@ -73,7 +76,24 @@ export default function CreateLocationDialog({ open, onOpenChange, contactId }: 
           {/* Address */}
           <div className="space-y-2">
             <Label htmlFor="loc_addr1">Street Address *</Label>
-            <Input id="loc_addr1" value={formData.address_line1} onChange={(e) => setFormData({ ...formData, address_line1: e.target.value })} required />
+            <AddressAutocomplete
+              id="loc_addr1"
+              value={formData.address_line1}
+              onChange={(v) => setFormData((prev) => ({ ...prev, address_line1: v }))}
+              onPlace={(place) => {
+                const p = parsePlaceComponents(place);
+                setFormData((prev) => ({
+                  ...prev,
+                  address_line1: p.address_line1 || p.formatted || prev.address_line1,
+                  city: p.city || prev.city,
+                  state: p.state || prev.state,
+                  zip: p.zip || prev.zip,
+                  latitude: p.latitude ?? prev.latitude,
+                  longitude: p.longitude ?? prev.longitude,
+                }));
+              }}
+              placeholder="Start typing an address…"
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="loc_addr2">Suite / Unit</Label>

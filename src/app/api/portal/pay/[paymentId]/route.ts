@@ -64,10 +64,9 @@ export async function POST(
   }
 
   if (!PAYABLE_STATUSES.has(payment.status)) {
-    return NextResponse.json(
-      { error: `Payment is ${payment.status} and cannot be paid` },
-      { status: 409 }
-    );
+    // Already paid / processing — don't error; bounce back to the payments page
+    // with a friendly status the page can render.
+    return relativeRedirect(`/portal/payments?status=already_paid&pid=${payment.id}`);
   }
 
   // Resolve the contractor's connected Stripe account (scoped to the payment's
@@ -195,7 +194,7 @@ export async function POST(
         contact_id: session.contactId,
         source: "portal",
       },
-      success_url: `${publicEnv.NEXT_PUBLIC_APP_URL}/portal/payments?status=success&pid=${payment.id}`,
+      success_url: `${publicEnv.NEXT_PUBLIC_APP_URL}/portal/payments?status=success&pid=${payment.id}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${publicEnv.NEXT_PUBLIC_APP_URL}/portal/payments?status=cancelled&pid=${payment.id}`,
     });
 

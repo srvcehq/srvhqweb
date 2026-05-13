@@ -35,7 +35,6 @@ import EditContactDialog from "@/components/contacts/edit-contact-dialog";
 import DeleteContactDialog from "@/components/contacts/delete-contact-dialog";
 import CreateLocationDialog from "@/components/contacts/create-location-dialog";
 import EditLocationDialog from "@/components/contacts/edit-location-dialog";
-import EditMaintenancePlanDialog from "@/components/contacts/edit-maintenance-plan-dialog";
 import { MaintenancePlanDrawer } from "@/components/maintenance/maintenance-plan-drawer";
 import type { Contact, MaintenancePlan, MaintenanceVisit, Project, Payment, Location } from "@/data/types";
 import { classifyContact } from "@/lib/contact-classification";
@@ -2206,10 +2205,16 @@ export default function ContactDetailPage({
         )}
 
         {editingPlan && (
-          <EditMaintenancePlanDialog
+          <MaintenancePlanDrawer
             open={!!editingPlan}
-            onOpenChange={(open) => !open && setEditingPlan(null)}
-            plan={editingPlan}
+            onOpenChange={(o) => !o && setEditingPlan(null)}
+            editPlan={editingPlan}
+            contactId={editingPlan.contact_id}
+            contactName={contact.company_name || fullName}
+            onCreated={() => {
+              queryClient.invalidateQueries({ queryKey: ["maintenance-plans"] });
+              queryClient.invalidateQueries({ queryKey: ["maintenance-visits"] });
+            }}
           />
         )}
 

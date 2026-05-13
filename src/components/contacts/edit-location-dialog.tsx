@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
+import { AddressAutocomplete, parsePlaceComponents } from "@/components/shared/address-autocomplete";
 import { toast } from "sonner";
 import type { Location } from "@/data/types";
 
@@ -30,6 +31,8 @@ export default function EditLocationDialog({ open, onOpenChange, location }: Edi
     city: "",
     state: "",
     zip: "",
+    latitude: undefined as number | undefined,
+    longitude: undefined as number | undefined,
     notes: "",
   });
 
@@ -42,6 +45,8 @@ export default function EditLocationDialog({ open, onOpenChange, location }: Edi
         city: location.city || "",
         state: location.state || "",
         zip: location.zip || "",
+        latitude: location.latitude,
+        longitude: location.longitude,
         notes: location.notes || "",
       });
     }
@@ -79,7 +84,24 @@ export default function EditLocationDialog({ open, onOpenChange, location }: Edi
           </div>
           <div className="space-y-2">
             <Label htmlFor="eloc_addr1">Street Address *</Label>
-            <Input id="eloc_addr1" value={formData.address_line1} onChange={(e) => setFormData({ ...formData, address_line1: e.target.value })} required />
+            <AddressAutocomplete
+              id="eloc_addr1"
+              value={formData.address_line1}
+              onChange={(v) => setFormData((prev) => ({ ...prev, address_line1: v }))}
+              onPlace={(place) => {
+                const p = parsePlaceComponents(place);
+                setFormData((prev) => ({
+                  ...prev,
+                  address_line1: p.address_line1 || p.formatted || prev.address_line1,
+                  city: p.city || prev.city,
+                  state: p.state || prev.state,
+                  zip: p.zip || prev.zip,
+                  latitude: p.latitude ?? prev.latitude,
+                  longitude: p.longitude ?? prev.longitude,
+                }));
+              }}
+              placeholder="Start typing an address…"
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="eloc_addr2">Suite / Unit</Label>

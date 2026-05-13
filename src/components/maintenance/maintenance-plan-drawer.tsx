@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/data/api";
 import {
@@ -40,7 +40,7 @@ import {
   nextVisitDates,
   type MaintenanceFrequency,
 } from "@/lib/maintenance-schedule";
-import type { MaintenanceItem } from "@/data/types";
+import type { MaintenanceItem, MaintenancePlan } from "@/data/types";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -102,6 +102,7 @@ export function MaintenancePlanDrawer({
   contactId,
   contactName,
   locationId,
+  editPlan,
   onCreated,
 }: {
   open: boolean;
@@ -110,9 +111,12 @@ export function MaintenancePlanDrawer({
   contactId?: string;
   contactName?: string;
   locationId?: string;
+  /** When set, the drawer edits this plan instead of creating a new one. */
+  editPlan?: MaintenancePlan;
   onCreated?: () => void;
 }) {
   const queryClient = useQueryClient();
+  const isEdit = !!editPlan;
 
   const [section, setSection] = useState<SectionKey>("basics");
   const [saving, setSaving] = useState(false);
@@ -154,6 +158,45 @@ export function MaintenancePlanDrawer({
     queryFn: () => db.Contact.list(),
     enabled: open && !contactId,
   });
+
+  // ---- prefill when editing ----
+  useEffect(() => {
+    if (!open || !editPlan) return;
+    setSection("basics");
+    setPickedContactId(editPlan.contact_id);
+    setPlanName(editPlan.title ?? "");
+    setFrequency((editPlan.frequency as MaintenanceFrequency) ?? "weekly");
+    setDayOfWeek(editPlan.day_of_week ?? 1);
+    setStartDate(editPlan.start_date ?? new Date().toISOString().slice(0, 10));
+    setSeasonEnd(editPlan.end_date ?? "");
+    setServices(((editPlan.services ?? []) as unknown as PlanService[]).map((s) => ({
+      id: s.id,
+      name: s.name,
+      pricing_type: s.pricing_type ?? "flat_rate",
+      price: Number(s.price) || 0,
+      qty: Number(s.qty) || 1,
+      notes: s.notes ?? "",
+      included: true,
+    })));
+    setUpsells(((editPlan.upsells ?? []) as unknown as PlanUpsell[]).map((u) => ({
+      id: u.id ?? crypto.randomUUID(),
+      name: u.name,
+      price: Number(u.price) || 0,
+      duration_minutes: Number(u.duration_minutes) || 0,
+      scheduled_date: u.scheduled_date ?? "",
+      frequency: "one_time" as const,
+    })));
+    setPricingType(
+      editPlan.billing_method === "monthly"
+        ? "flat_monthly"
+        : editPlan.billing_method === "quarterly" || editPlan.billing_method === "annually"
+          ? "flat_seasonal"
+          : "per_visit"
+    );
+    setBillingTiming("after_complete");
+    setSpecialInstructions((editPlan.notes ?? "").replace(/\s*Pricing:[\s\S]*$/, "").trim());
+    setTimePerVisit("45");
+  }, [open, editPlan]);
 
   // ---- derived ----
   const pricePerVisit = useMemo(
@@ -263,11 +306,11 @@ export function MaintenancePlanDrawer({
         specialInstructions.trim(),
         `Pricing: ${pt.label}; Billing: ${billingTiming === "after_complete" ? "auto after marked complete" : "auto on scheduled visits"}.`,
       ].filter(Boolean);
-      const plan = await db.MaintenancePlan.create({
+      const planFields = {
         contact_id: pickedContactId,
         location_id: locationId,
         title: planName.trim(),
-        status: "active",
+        status: "active" as const,
         frequency,
         day_of_week: dayOfWeek,
         start_date: startDate,
@@ -293,29 +336,35 @@ export function MaintenancePlanDrawer({
           duration_minutes: u.duration_minutes,
           scheduled_date: u.scheduled_date,
         })) as never,
-      });
+      };
 
-      const serviceNames = services.map((s) => s.name).join(", ");
-      for (const date of previewDates) {
-        const ups = upsells.find((u) => u.scheduled_date === date);
-        await db.MaintenanceVisit.create({
-          maintenance_plan_id: plan.id,
-          contact_id: pickedContactId,
-          location_id: locationId,
-          visit_date: date,
-          status: "scheduled",
-          service_performed: ups ? `${serviceNames} + ${ups.name}` : serviceNames,
-          duration_minutes: baseDuration + (ups?.duration_minutes ?? 0),
-          amountDue: pricePerVisit + (ups?.price ?? 0),
-          payment_status: "unpaid",
-        });
+      if (isEdit && editPlan) {
+        await db.MaintenancePlan.update(editPlan.id, planFields);
+        // (existing visits are left as-is; schedule changes apply going forward)
+      } else {
+        const plan = await db.MaintenancePlan.create(planFields);
+        const serviceNames = services.map((s) => s.name).join(", ");
+        for (const date of previewDates) {
+          const ups = upsells.find((u) => u.scheduled_date === date);
+          await db.MaintenanceVisit.create({
+            maintenance_plan_id: plan.id,
+            contact_id: pickedContactId,
+            location_id: locationId,
+            visit_date: date,
+            status: "scheduled",
+            service_performed: ups ? `${serviceNames} + ${ups.name}` : serviceNames,
+            duration_minutes: baseDuration + (ups?.duration_minutes ?? 0),
+            amountDue: pricePerVisit + (ups?.price ?? 0),
+            payment_status: "unpaid",
+          });
+        }
       }
 
       // refresh everything that shows maintenance plans / visits
       queryClient.invalidateQueries({ queryKey: ["maintenance-plans"] });
       queryClient.invalidateQueries({ queryKey: ["maintenance-visits"] });
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
-      toast.success("Maintenance plan created");
+      toast.success(isEdit ? "Maintenance plan updated" : "Maintenance plan created");
       onCreated?.();
       reset();
       onOpenChange(false);
@@ -384,7 +433,7 @@ export function MaintenancePlanDrawer({
         className="w-full sm:max-w-xl overflow-y-auto bg-white p-0"
       >
         <SheetHeader className="bg-emerald-50 border-b border-emerald-100 px-6 py-5">
-          <SheetTitle className="text-xl">Create Maintenance Plan</SheetTitle>
+          <SheetTitle className="text-xl">{isEdit ? "Edit Maintenance Plan" : "Create Maintenance Plan"}</SheetTitle>
           <SheetDescription>
             Step-by-step guided setup{contactName ? ` for ${contactName}` : ""}
           </SheetDescription>
@@ -719,7 +768,7 @@ export function MaintenancePlanDrawer({
             disabled={!canSave}
             className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white disabled:opacity-60"
           >
-            {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : "Save Maintenance Plan"}
+            {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : isEdit ? "Save Changes" : "Save Maintenance Plan"}
           </Button>
         </SheetFooter>
       </SheetContent>

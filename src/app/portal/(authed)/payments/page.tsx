@@ -5,9 +5,12 @@ import {
   Clock,
   ArrowRight,
   Receipt,
+  AlertCircle,
+  Info,
 } from "lucide-react";
 import { getPortalSession } from "@/lib/portal-session";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { stripe } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
 
@@ -79,11 +82,39 @@ interface PaymentRow {
   maintenance_plan_id: string | null;
 }
 
-export default async function PortalPaymentsPage() {
+export default async function PortalPaymentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string; pid?: string; session_id?: string }>;
+}) {
   const session = await getPortalSession();
   if (!session) redirect("/portal");
 
   const supabase = getSupabaseAdmin();
+  const sp = await searchParams;
+
+  // Just back from Stripe Checkout — verify the session and mark the payment
+  // paid right away (a backstop in case the webhook hasn't landed yet).
+  if (sp.status === "success" && sp.session_id && sp.pid) {
+    try {
+      const checkout = await stripe().checkout.sessions.retrieve(sp.session_id);
+      if (checkout.payment_status === "paid") {
+        const pi = checkout.payment_intent;
+        await supabase
+          .from("payments")
+          .update({
+            status: "succeeded",
+            paid_date: new Date().toISOString(),
+            stripe_payment_intent_id: typeof pi === "string" ? pi : pi?.id ?? null,
+            payment_method: "card",
+          } as never)
+          .eq("id", sp.pid)
+          .eq("contact_id", session.contactId);
+      }
+    } catch (err) {
+      console.error("[portal/payments] checkout verify failed", err);
+    }
+  }
 
   const { data: rows } = await supabase
     .from("payments")
@@ -117,6 +148,28 @@ export default async function PortalPaymentsPage() {
           View invoices, pay outstanding balances, and see your payment history.
         </p>
       </header>
+
+      {sp.status === "success" && (
+        <div className="mb-6 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4">
+          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+          <div>
+            <p className="font-medium text-emerald-800">Payment received — thank you!</p>
+            <p className="text-sm text-emerald-700">It&rsquo;s now marked paid below. A receipt was sent to your email.</p>
+          </div>
+        </div>
+      )}
+      {sp.status === "already_paid" && (
+        <div className="mb-6 flex items-center gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4">
+          <Info className="h-5 w-5 shrink-0 text-blue-600" />
+          <p className="font-medium text-blue-800">That invoice is already settled — nothing more to pay.</p>
+        </div>
+      )}
+      {sp.status === "cancelled" && (
+        <div className="mb-6 flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
+          <AlertCircle className="h-5 w-5 shrink-0 text-amber-600" />
+          <p className="font-medium text-amber-800">Payment cancelled — you can try again whenever you&rsquo;re ready.</p>
+        </div>
+      )}
 
       {/* Summary tiles */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-8">

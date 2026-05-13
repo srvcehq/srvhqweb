@@ -30,6 +30,8 @@ import {
 } from "@/components/ui/dialog";
 import { MapPin, Navigation, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { MapErrorBoundary } from "@/components/shared/map-error-boundary";
 import type { Contact } from "@/data/types";
 
 /* ------------------------------------------------------------------ */
@@ -572,10 +574,45 @@ export default function DoorToDoorPage() {
   }
 
   return (
-    <div className="h-[calc(100dvh-65px)] min-h-[500px] relative overflow-hidden">
-      <APIProvider apiKey={apiKey}>
-        <DoorToDoorMapContent />
-      </APIProvider>
+    <div className="p-4 md:p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg">
+            <Navigation className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold text-foreground">Door to Door</h1>
+            <p className="text-muted-foreground mt-1">
+              Canvass neighborhoods, log door knocks, and route your day
+            </p>
+          </div>
+        </div>
+
+        <Card className="shadow-lg overflow-hidden border-2 border-green-400">
+          <CardHeader className="bg-card border-b-2 border-green-400 p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-md">
+                <MapPin className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="font-bold text-foreground text-base">Canvassing Map</h3>
+                <p className="text-xs text-muted-foreground font-medium">
+                  Drop pins, set outcomes, and build your route
+                </p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="h-[600px] relative overflow-hidden">
+              <MapErrorBoundary>
+                <APIProvider apiKey={apiKey}>
+                  <DoorToDoorMapContent />
+                </APIProvider>
+              </MapErrorBoundary>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

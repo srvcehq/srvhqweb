@@ -8,7 +8,7 @@ import { useCompany } from "@/providers/company-provider";
 import { queryKeys } from "@/lib/query-keys";
 import { toast } from "sonner";
 import { formatAssignedCrew } from "@/hooks/use-employee-names";
-import CreateMaintenancePlanDialog from "@/components/contacts/create-maintenance-plan-dialog";
+import { MaintenancePlanDrawer } from "@/components/maintenance/maintenance-plan-drawer";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -505,10 +505,15 @@ export default function MaintenancePlansPage() {
           </CardContent>
         </Card>
 
-        {/* Create Plan Wizard */}
-        <CreateMaintenancePlanDialog
+        {/* Create Plan Wizard (drawer) */}
+        <MaintenancePlanDrawer
           open={showCreateDialog}
           onOpenChange={setShowCreateDialog}
+          onCreated={() =>
+            queryClient.invalidateQueries({
+              queryKey: queryKeys.maintenancePlans(currentCompanyId),
+            })
+          }
         />
       </div>
     </div>

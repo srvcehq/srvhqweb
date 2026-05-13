@@ -36,6 +36,7 @@ import DeleteContactDialog from "@/components/contacts/delete-contact-dialog";
 import CreateLocationDialog from "@/components/contacts/create-location-dialog";
 import EditLocationDialog from "@/components/contacts/edit-location-dialog";
 import EditMaintenancePlanDialog from "@/components/contacts/edit-maintenance-plan-dialog";
+import { MaintenancePlanDrawer } from "@/components/maintenance/maintenance-plan-drawer";
 import type { Contact, MaintenancePlan, MaintenanceVisit, Project, Payment, Location } from "@/data/types";
 import { classifyContact } from "@/lib/contact-classification";
 import { useSendCommunication } from "@/hooks/use-send-communication";
@@ -56,6 +57,7 @@ export default function ContactDetailPage({
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
   const [expandedLocationIds, setExpandedLocationIds] = useState<Record<string, boolean>>({});
   const [editingPlan, setEditingPlan] = useState<MaintenancePlan | null>(null);
+  const [showMaintenanceDrawer, setShowMaintenanceDrawer] = useState(false);
   const searchParams = useSearchParams();
 
   const { data: allContacts = [], isLoading: contactsLoading } = useQuery({
@@ -416,6 +418,13 @@ export default function ContactDetailPage({
           </div>
 
           <div className="flex items-center gap-2">
+            <Button
+              onClick={() => setShowMaintenanceDrawer(true)}
+              className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white"
+            >
+              <Wrench className="w-4 h-4 mr-2" />
+              Create Maintenance Plan
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -2203,6 +2212,17 @@ export default function ContactDetailPage({
             plan={editingPlan}
           />
         )}
+
+        <MaintenancePlanDrawer
+          open={showMaintenanceDrawer}
+          onOpenChange={setShowMaintenanceDrawer}
+          contactId={contactId}
+          contactName={contact.company_name || fullName}
+          onCreated={() => {
+            queryClient.invalidateQueries({ queryKey: ["maintenance-plans"] });
+            queryClient.invalidateQueries({ queryKey: ["maintenance-visits"] });
+          }}
+        />
       </div>
     </div>
   );

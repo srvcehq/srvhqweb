@@ -65,7 +65,7 @@ function formatRelativeTime(dateStr: string): string {
 function formatMessageLabel(type: string, dateStr: string): string {
   const typeLabel =
     type === "sms"
-      ? "SMS"
+      ? "Text"
       : type === "email"
         ? "Email"
         : type === "call"
@@ -113,6 +113,44 @@ function typeIcon(type: string) {
     default:
       return <MessageSquare className="w-4 h-4" />;
   }
+}
+
+/** Small "Email" / "Text" / "Call" / "Note" channel tag. */
+function ChannelTag({ type }: { type: string }) {
+  const cfg: Record<
+    string,
+    { label: string; cls: string; Icon: React.ComponentType<{ className?: string }> }
+  > = {
+    email: {
+      label: "Email",
+      cls: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800/40",
+      Icon: Mail,
+    },
+    sms: {
+      label: "Text",
+      cls: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/40",
+      Icon: MessageCircle,
+    },
+    call: {
+      label: "Call",
+      cls: "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-300 dark:border-violet-800/40",
+      Icon: Phone,
+    },
+    note: {
+      label: "Note",
+      cls: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/40",
+      Icon: StickyNote,
+    },
+  };
+  const c = cfg[type] ?? cfg.note;
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium ${c.cls}`}
+    >
+      <c.Icon className="h-3 w-3" />
+      {c.label}
+    </span>
+  );
 }
 
 function statusIcon(status?: string) {
@@ -355,7 +393,7 @@ export default function CommunicationsPage() {
               </div>
             ) : (
               filteredContacts.map(
-                ({ contact, lastMessage, lastMessageTime }) => (
+                ({ contact, lastMessage, lastMessageTime, lastMessageType }) => (
                   <button
                     key={contact.id}
                     onClick={() => handleSelectContact(contact.id)}
@@ -373,9 +411,12 @@ export default function CommunicationsPage() {
                         {formatRelativeTime(lastMessageTime)}
                       </span>
                     </div>
-                    <p className="text-xs text-muted-foreground truncate mt-1 leading-relaxed">
-                      {lastMessage}
-                    </p>
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <ChannelTag type={lastMessageType} />
+                      <p className="text-xs text-muted-foreground truncate leading-relaxed">
+                        {lastMessage}
+                      </p>
+                    </div>
                   </button>
                 )
               )
@@ -478,11 +519,8 @@ export default function CommunicationsPage() {
                           ) : (
                             /* Call / Note — neutral card style */
                             <div className="max-w-[85%] rounded-lg border border-border bg-card px-4 py-3 text-sm transition-shadow duration-150 group-hover:shadow-md">
-                              <div className="flex items-center gap-1.5 mb-1.5 text-muted-foreground">
-                                {typeIcon(comm.type)}
-                                <span className="text-xs font-medium capitalize">
-                                  {comm.type} Log
-                                </span>
+                              <div className="mb-1.5">
+                                <ChannelTag type={comm.type} />
                               </div>
                               {comm.subject && (
                                 <p className="font-medium text-foreground text-sm mb-1">

@@ -385,7 +385,7 @@ export default function ContactDetailPage({
           </div>
         </div>
         {isExpanded && (
-        <div className="divide-y border-t">
+        <div className="border-t p-5 space-y-3">
           {visits.map((visit) => {
             const isOverdue = visit.visit_date < today;
             const dateObj = new Date(visit.visit_date);
@@ -403,7 +403,7 @@ export default function ContactDetailPage({
             return (
               <div
                 key={visit.id}
-                className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-4 items-center px-5 py-4"
+                className="rounded-lg border bg-card px-4 py-3 grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-4 items-center"
               >
                 <div>
                   <div

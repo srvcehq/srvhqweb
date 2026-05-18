@@ -54,6 +54,8 @@ import {
   FolderPlus,
   GripVertical,
   Info,
+  Check,
+  X,
 } from "lucide-react";
 import {
   Tooltip,
@@ -108,6 +110,14 @@ export default function BidItemsPage() {
 
   const [newCategoryName, setNewCategoryName] = useState("");
 
+  // Inline create state for category and unit fields in the item modal
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [newCategoryInput, setNewCategoryInput] = useState("");
+  const [extraCategories, setExtraCategories] = useState<string[]>([]);
+  const [creatingUnit, setCreatingUnit] = useState(false);
+  const [newUnitInput, setNewUnitInput] = useState("");
+  const [extraUnits, setExtraUnits] = useState<string[]>([]);
+
   // Load items on mount
   React.useEffect(() => {
     async function load() {
@@ -126,6 +136,12 @@ export default function BidItemsPage() {
     });
     return Array.from(cats).sort();
   }, [items]);
+
+  // All categories available in the modal dropdown (existing + session-created)
+  const allDropdownCategories = useMemo(() => {
+    const combined = new Set([...categories, ...extraCategories]);
+    return Array.from(combined).sort();
+  }, [categories, extraCategories]);
 
   // Filter items
   const filteredItems = useMemo(() => {
@@ -192,6 +208,8 @@ export default function BidItemsPage() {
     } else {
       const created = await db.ItemsCatalog.create(data);
       setItems((prev) => [...prev, created]);
+      // Always return to "All Items" after creating a new item
+      setSelectedCategory(null);
     }
     setShowItemDialog(false);
   };
@@ -201,6 +219,24 @@ export default function BidItemsPage() {
     await db.ItemsCatalog.delete(pendingDeleteItem.id);
     setItems((prev) => prev.filter((i) => i.id !== pendingDeleteItem!.id));
     setPendingDeleteItem(null);
+  };
+
+  const confirmNewCategory = () => {
+    const name = newCategoryInput.trim();
+    if (!name) return;
+    if (!extraCategories.includes(name)) setExtraCategories((p) => [...p, name]);
+    setItemForm((f) => ({ ...f, category: name }));
+    setCreatingCategory(false);
+    setNewCategoryInput("");
+  };
+
+  const confirmNewUnit = () => {
+    const name = newUnitInput.trim();
+    if (!name) return;
+    if (!extraUnits.includes(name)) setExtraUnits((p) => [...p, name]);
+    setItemForm((f) => ({ ...f, unit: name as ItemsCatalog["unit"] }));
+    setCreatingUnit(false);
+    setNewUnitInput("");
   };
 
   const handleAddCategory = () => {
@@ -460,7 +496,15 @@ export default function BidItemsPage() {
         </div>
 
         {/* Item Editor Dialog */}
-        <Dialog open={showItemDialog} onOpenChange={setShowItemDialog}>
+        <Dialog open={showItemDialog} onOpenChange={(open) => {
+          setShowItemDialog(open);
+          if (!open) {
+            setCreatingCategory(false);
+            setNewCategoryInput("");
+            setCreatingUnit(false);
+            setNewUnitInput("");
+          }
+        }}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle className="text-2xl font-bold">
@@ -482,42 +526,99 @@ export default function BidItemsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="item-category">Category</Label>
-                  <Select
-                    value={itemForm.category}
-                    onValueChange={(val) => setItemForm({ ...itemForm, category: val })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat} value={cat}>
-                          {cat}
+                  {creatingCategory ? (
+                    <div className="flex gap-1.5">
+                      <Input
+                        autoFocus
+                        value={newCategoryInput}
+                        onChange={(e) => setNewCategoryInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { e.preventDefault(); confirmNewCategory(); }
+                          if (e.key === "Escape") { setCreatingCategory(false); setNewCategoryInput(""); }
+                        }}
+                        placeholder="New category name"
+                        className="flex-1"
+                      />
+                      <Button type="button" size="icon" variant="ghost" className="h-10 w-10 text-green-600 hover:text-green-700" onClick={confirmNewCategory}>
+                        <Check className="w-4 h-4" />
+                      </Button>
+                      <Button type="button" size="icon" variant="ghost" className="h-10 w-10" onClick={() => { setCreatingCategory(false); setNewCategoryInput(""); }}>
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <Select
+                      value={itemForm.category}
+                      onValueChange={(val) => {
+                        if (val === "__new_category__") { setCreatingCategory(true); }
+                        else { setItemForm({ ...itemForm, category: val }); }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allDropdownCategories.map((cat) => (
+                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        ))}
+                        {!allDropdownCategories.includes("Uncategorized") && (
+                          <SelectItem value="Uncategorized">Uncategorized</SelectItem>
+                        )}
+                        <SelectItem value="__new_category__" className="text-green-600 font-medium">
+                          ＋ Create new category
                         </SelectItem>
-                      ))}
-                      <SelectItem value="Uncategorized">Uncategorized</SelectItem>
-                    </SelectContent>
-                  </Select>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="item-unit">Unit *</Label>
-                  <Select
-                    value={itemForm.unit}
-                    onValueChange={(val) =>
-                      setItemForm({ ...itemForm, unit: val as ItemsCatalog["unit"] })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ea">Each</SelectItem>
-                      <SelectItem value="sq_ft">Sq Ft</SelectItem>
-                      <SelectItem value="ton">Ton</SelectItem>
-                      <SelectItem value="hr">Hour</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {creatingUnit ? (
+                    <div className="flex gap-1.5">
+                      <Input
+                        autoFocus
+                        value={newUnitInput}
+                        onChange={(e) => setNewUnitInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { e.preventDefault(); confirmNewUnit(); }
+                          if (e.key === "Escape") { setCreatingUnit(false); setNewUnitInput(""); }
+                        }}
+                        placeholder="e.g. linear ft, pallet"
+                        className="flex-1"
+                      />
+                      <Button type="button" size="icon" variant="ghost" className="h-10 w-10 text-green-600 hover:text-green-700" onClick={confirmNewUnit}>
+                        <Check className="w-4 h-4" />
+                      </Button>
+                      <Button type="button" size="icon" variant="ghost" className="h-10 w-10" onClick={() => { setCreatingUnit(false); setNewUnitInput(""); }}>
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <Select
+                      value={itemForm.unit}
+                      onValueChange={(val) => {
+                        if (val === "__new_unit__") { setCreatingUnit(true); }
+                        else { setItemForm({ ...itemForm, unit: val as ItemsCatalog["unit"] }); }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ea">Each</SelectItem>
+                        <SelectItem value="sq_ft">Sq Ft</SelectItem>
+                        <SelectItem value="ton">Ton</SelectItem>
+                        <SelectItem value="hr">Hour</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                        {extraUnits.map((u) => (
+                          <SelectItem key={u} value={u}>{u}</SelectItem>
+                        ))}
+                        <SelectItem value="__new_unit__" className="text-green-600 font-medium">
+                          ＋ Create new unit
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               </div>
 

@@ -117,7 +117,7 @@ interface FormData {
 const EMPTY_FORM: FormData = {
   name: "",
   description: "",
-  pricing_type: "flat_rate",
+  pricing_type: "per_unit",
   unit_label: "",
   price_per_unit: "",
   avg_minutes_per_unit: "",
@@ -502,11 +502,11 @@ export default function MaintenanceItemsPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="flat_rate">
-                    Flat Rate (fixed) — same price per visit regardless of scope
-                  </SelectItem>
                   <SelectItem value="per_unit">
                     Per Unit (fixed) — fixed price per countable unit
+                  </SelectItem>
+                  <SelectItem value="flat_rate">
+                    Flat Rate (fixed) — same price per visit regardless of scope
                   </SelectItem>
                   <SelectItem value="variable">
                     Variable (set per client) — price varies by customer

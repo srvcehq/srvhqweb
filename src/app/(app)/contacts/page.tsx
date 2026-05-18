@@ -56,23 +56,9 @@ function ContactsPage() {
   const { currentCompanyId, isLoading: isLoadingCompany } = useCompany();
 
   // Collapsible section state
-  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
-    if (typeof window === "undefined") {
-      return { commercial: true, maintenance: true, project: true, lead: true, archived: true };
-    }
-    try {
-      const saved = localStorage.getItem("contacts-collapsed-sections");
-      return saved
-        ? JSON.parse(saved)
-        : { commercial: true, maintenance: true, project: true, lead: true, archived: true };
-    } catch {
-      return { commercial: true, maintenance: true, project: true, lead: true, archived: true };
-    }
-  });
-
-  useEffect(() => {
-    localStorage.setItem("contacts-collapsed-sections", JSON.stringify(collapsedSections));
-  }, [collapsedSections]);
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(
+    { commercial: true, maintenance: true, project: true, lead: true, archived: true }
+  );
 
   const toggleSection = (sectionKey: string) => {
     setCollapsedSections((prev) => ({ ...prev, [sectionKey]: !prev[sectionKey] }));

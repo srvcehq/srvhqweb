@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { db } from "@/data/api";
 import { ItemsCatalog } from "@/data/types";
+import { toast } from "sonner";
 import { useCompany } from "@/providers/company-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -193,25 +194,43 @@ export default function BidItemsPage() {
 
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // If the inline category or unit input is still open, auto-confirm it
+    const resolvedCategory = creatingCategory && newCategoryInput.trim()
+      ? newCategoryInput.trim()
+      : itemForm.category;
+    const resolvedUnit = creatingUnit && newUnitInput.trim()
+      ? newUnitInput.trim() as ItemsCatalog["unit"]
+      : itemForm.unit;
+
+    if (creatingCategory) { setCreatingCategory(false); setNewCategoryInput(""); }
+    if (creatingUnit)     { setCreatingUnit(false);     setNewUnitInput(""); }
+
     const data = {
       ...itemForm,
+      category: resolvedCategory,
+      unit: resolvedUnit,
       company_id: currentCompanyId,
       default_unit_cost: parseFloat(String(itemForm.default_unit_cost)) || 0,
       default_sell_price: parseFloat(String(itemForm.default_sell_price)) || 0,
     };
 
-    if (editingItem) {
-      const updated = await db.ItemsCatalog.update(editingItem.id, data);
-      if (updated) {
-        setItems((prev) => prev.map((i) => (i.id === editingItem.id ? updated : i)));
+    try {
+      if (editingItem) {
+        const updated = await db.ItemsCatalog.update(editingItem.id, data);
+        if (updated) {
+          setItems((prev) => prev.map((i) => (i.id === editingItem.id ? updated : i)));
+        }
+      } else {
+        const created = await db.ItemsCatalog.create(data);
+        setItems((prev) => [...prev, created]);
+        // Always return to "All Items" after creating a new item
+        setSelectedCategory(null);
       }
-    } else {
-      const created = await db.ItemsCatalog.create(data);
-      setItems((prev) => [...prev, created]);
-      // Always return to "All Items" after creating a new item
-      setSelectedCategory(null);
+      setShowItemDialog(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save item");
     }
-    setShowItemDialog(false);
   };
 
   const handleConfirmDelete = async () => {

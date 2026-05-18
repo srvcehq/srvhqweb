@@ -322,6 +322,110 @@ export default function ContactDetailPage({
     );
   };
 
+  const renderVisitsSection = (
+    upcomingScheduled: MaintenanceVisit[],
+    overdueVisits: MaintenanceVisit[],
+    today: string,
+  ) => {
+    const visits = [...overdueVisits, ...upcomingScheduled].sort((a, b) =>
+      a.visit_date.localeCompare(b.visit_date),
+    );
+    if (visits.length === 0) return null;
+
+    return (
+      <Card className="shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between gap-3 px-5 py-4 bg-blue-50/60 dark:bg-blue-950/20 border-b">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-blue-600" />
+            <h3 className="font-bold text-foreground text-base">Visits</h3>
+          </div>
+          <div className="flex items-center gap-4 text-sm">
+            <span>
+              <span className="text-muted-foreground">Overdue: </span>
+              <span className="font-bold text-orange-600">{overdueVisits.length}</span>
+            </span>
+            <span>
+              <span className="text-muted-foreground">Scheduled: </span>
+              <span className="font-bold text-blue-600">{upcomingScheduled.length}</span>
+            </span>
+            <Button
+              size="sm"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={() => toast.info("Add One Time Visit coming soon.")}
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              Add One Time Visit
+            </Button>
+          </div>
+        </div>
+        <div className="divide-y">
+          {visits.map((visit) => {
+            const isOverdue = visit.visit_date < today;
+            const dateObj = new Date(visit.visit_date);
+            const dateLine = dateObj.toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            });
+            const dayOfWeek = dateObj.toLocaleDateString("en-US", { weekday: "long" });
+            const crewAssigned = formatAssignedCrew(visit.assigned_employee_ids, employees, { maxDisplay: 2 });
+            const crewText = visit.assigned_employee_ids?.length
+              ? crewAssigned
+              : "Not assigned";
+
+            return (
+              <div
+                key={visit.id}
+                className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-4 items-center px-5 py-4"
+              >
+                <div>
+                  <div
+                    className={`text-base font-bold ${
+                      isOverdue ? "text-orange-600" : "text-foreground"
+                    }`}
+                  >
+                    {dateLine}
+                  </div>
+                  <div className="text-sm text-muted-foreground">{dayOfWeek}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Service</div>
+                  <div className="text-sm font-medium">
+                    {visit.service_performed || "General maintenance"}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Crew</div>
+                  <div className="text-sm font-medium">{crewText}</div>
+                </div>
+                <div className="flex items-center justify-end gap-2 flex-wrap">
+                  {isOverdue && (
+                    <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-900/40">
+                      Overdue
+                    </Badge>
+                  )}
+                  {(visit.payment_status === "unpaid" || !visit.payment_status) && (
+                    <Badge
+                      variant="outline"
+                      className="font-normal text-muted-foreground"
+                    >
+                      Pay link not sent
+                    </Badge>
+                  )}
+                  {typeof visit.duration_minutes === "number" && (
+                    <span className="text-sm text-muted-foreground whitespace-nowrap">
+                      {visit.duration_minutes} min
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    );
+  };
+
   const handleCopyAddress = async () => {
     if (!contact) return;
     const addressParts = [
@@ -1550,61 +1654,7 @@ export default function ContactDetailPage({
                               <div key={plan.id} className="space-y-4">
                                 {renderActivePlanCard(plan, nextVisit)}
 
-                                {/* Upcoming / Scheduled Visits */}
-                                {(upcomingScheduled.length > 0 || overdueVisits.length > 0) && (
-                                  <Card className="shadow-sm">
-                                    <CardHeader className="pb-3">
-                                      <CardTitle className="text-base">Upcoming / Scheduled Visits</CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                      <div className="rounded-lg border">
-                                        <Table>
-                                          <TableHeader>
-                                            <TableRow>
-                                              <TableHead>Date</TableHead>
-                                              <TableHead>Service</TableHead>
-                                              <TableHead>Status</TableHead>
-                                              <TableHead>Payment</TableHead>
-                                            </TableRow>
-                                          </TableHeader>
-                                          <TableBody>
-                                            {[...overdueVisits, ...upcomingScheduled]
-                                              .sort((a, b) => a.visit_date.localeCompare(b.visit_date))
-                                              .map((visit) => {
-                                                const isOverdue = visit.visit_date < today;
-                                                return (
-                                                  <TableRow key={visit.id}>
-                                                    <TableCell className="font-medium">
-                                                      {new Date(visit.visit_date).toLocaleDateString()}
-                                                    </TableCell>
-                                                    <TableCell>{visit.service_performed || "General maintenance"}</TableCell>
-                                                    <TableCell>
-                                                      <Badge className={
-                                                        isOverdue
-                                                          ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                                                          : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                                                      }>
-                                                        {isOverdue ? "overdue" : "scheduled"}
-                                                      </Badge>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                      <Badge className={
-                                                        visit.payment_status === "paid"
-                                                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                                          : "bg-gray-100 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400"
-                                                      }>
-                                                        {visit.payment_status || "unpaid"}
-                                                      </Badge>
-                                                    </TableCell>
-                                                  </TableRow>
-                                                );
-                                              })}
-                                          </TableBody>
-                                        </Table>
-                                      </div>
-                                    </CardContent>
-                                  </Card>
-                                )}
+                                {renderVisitsSection(upcomingScheduled, overdueVisits, today)}
 
                                 {/* Service History */}
                                 {historyVisits.length > 0 && (
@@ -1733,60 +1783,7 @@ export default function ContactDetailPage({
                               </CardContent>
                             </Card>
 
-                            {(upcomingScheduled.length > 0 || overdueVisits.length > 0) && (
-                              <Card className="shadow-sm">
-                                <CardHeader className="pb-3">
-                                  <CardTitle className="text-base">Upcoming / Scheduled Visits</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                  <div className="rounded-lg border">
-                                    <Table>
-                                      <TableHeader>
-                                        <TableRow>
-                                          <TableHead>Date</TableHead>
-                                          <TableHead>Service</TableHead>
-                                          <TableHead>Status</TableHead>
-                                          <TableHead>Payment</TableHead>
-                                        </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
-                                        {[...overdueVisits, ...upcomingScheduled]
-                                          .sort((a, b) => a.visit_date.localeCompare(b.visit_date))
-                                          .map((visit) => {
-                                            const isOverdue = visit.visit_date < today;
-                                            return (
-                                              <TableRow key={visit.id}>
-                                                <TableCell className="font-medium">
-                                                  {new Date(visit.visit_date).toLocaleDateString()}
-                                                </TableCell>
-                                                <TableCell>{visit.service_performed || "General maintenance"}</TableCell>
-                                                <TableCell>
-                                                  <Badge className={
-                                                    isOverdue
-                                                      ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                                                      : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                                                  }>
-                                                    {isOverdue ? "overdue" : "scheduled"}
-                                                  </Badge>
-                                                </TableCell>
-                                                <TableCell>
-                                                  <Badge className={
-                                                    visit.payment_status === "paid"
-                                                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                                      : "bg-gray-100 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400"
-                                                  }>
-                                                    {visit.payment_status || "unpaid"}
-                                                  </Badge>
-                                                </TableCell>
-                                              </TableRow>
-                                            );
-                                          })}
-                                      </TableBody>
-                                    </Table>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            )}
+                            {renderVisitsSection(upcomingScheduled, overdueVisits, today)}
 
                             {historyVisits.length > 0 && (
                               <Card className="shadow-sm">
@@ -1889,61 +1886,7 @@ export default function ContactDetailPage({
                     <div key={plan.id} className="space-y-4">
                       {renderActivePlanCard(plan, nextVisit)}
 
-                      {/* Upcoming / Scheduled Visits */}
-                      {(upcomingScheduled.length > 0 || overdueVisits.length > 0) && (
-                        <Card className="shadow-sm">
-                          <CardHeader className="pb-3">
-                            <CardTitle className="text-base">Upcoming / Scheduled Visits</CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="rounded-lg border">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Date</TableHead>
-                                    <TableHead>Service</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead>Payment</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {[...overdueVisits, ...upcomingScheduled]
-                                    .sort((a, b) => a.visit_date.localeCompare(b.visit_date))
-                                    .map((visit) => {
-                                      const isOverdue = visit.visit_date < today;
-                                      return (
-                                        <TableRow key={visit.id}>
-                                          <TableCell className="font-medium">
-                                            {new Date(visit.visit_date).toLocaleDateString()}
-                                          </TableCell>
-                                          <TableCell>{visit.service_performed || "General maintenance"}</TableCell>
-                                          <TableCell>
-                                            <Badge className={
-                                              isOverdue
-                                                ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                                                : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                                            }>
-                                              {isOverdue ? "overdue" : "scheduled"}
-                                            </Badge>
-                                          </TableCell>
-                                          <TableCell>
-                                            <Badge className={
-                                              visit.payment_status === "paid"
-                                                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                                : "bg-gray-100 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400"
-                                            }>
-                                              {visit.payment_status || "unpaid"}
-                                            </Badge>
-                                          </TableCell>
-                                        </TableRow>
-                                      );
-                                    })}
-                                </TableBody>
-                              </Table>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      )}
+                      {renderVisitsSection(upcomingScheduled, overdueVisits, today)}
 
                       {/* Service History */}
                       {historyVisits.length > 0 && (

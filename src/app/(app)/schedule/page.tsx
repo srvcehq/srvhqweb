@@ -150,7 +150,7 @@ export default function SchedulePage() {
   const getVisitsForDay = (dateStr: string) =>
     filterItems(
       visits.filter(
-        (v) => v.visit_date === dateStr && v.status !== "cancelled" && v.status !== "skipped"
+        (v) => v.visit_date === dateStr && v.status !== "skipped"
       )
     );
 
@@ -274,6 +274,7 @@ export default function SchedulePage() {
     const cls: Record<string, string> = {
       scheduled: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
       completed: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+      cancelled: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
     };
     return (
       <Badge variant="outline" className={cls[status] || "bg-gray-100 text-gray-700"}>
@@ -497,7 +498,11 @@ export default function SchedulePage() {
                               {dv.map((visit) => (
                                 <button
                                   key={visit.id}
-                                  className="w-full rounded px-1.5 py-0.5 mb-0.5 text-xs bg-amber-100 text-amber-800 truncate border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800/40 dark:text-amber-400 text-left hover:bg-amber-200 transition-colors"
+                                  className={`w-full rounded px-1.5 py-0.5 mb-0.5 text-xs truncate border text-left transition-colors ${
+                                    visit.status === "cancelled"
+                                      ? "bg-rose-100 text-rose-700 border-rose-200 hover:bg-rose-200 dark:bg-rose-950/20 dark:border-rose-800/40 dark:text-rose-400 line-through opacity-75"
+                                      : "bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200 dark:bg-amber-950/20 dark:border-amber-800/40 dark:text-amber-400"
+                                  }`}
                                   onClick={() => setDetailVisit(visit)}
                                   title={`${getName(visit.contact_id, visit.location_id)} \u2022 ${formatTime12(visit.start_time)} \u2013 ${formatTime12(visit.end_time)}`}
                                 >
@@ -580,14 +585,18 @@ export default function SchedulePage() {
                         {dv.map((visit) => (
                           <button
                             key={visit.id}
-                            className="w-full rounded-lg px-3 py-2 text-sm bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800/40 flex items-center justify-between hover:bg-amber-100 transition-colors text-left"
+                            className={`w-full rounded-lg px-3 py-2 text-sm border flex items-center justify-between transition-colors text-left ${
+                              visit.status === "cancelled"
+                                ? "bg-rose-50 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/20 dark:border-rose-800/40 opacity-75"
+                                : "bg-amber-50 border-amber-200 hover:bg-amber-100 dark:bg-amber-950/20 dark:border-amber-800/40"
+                            }`}
                             onClick={() => setDetailVisit(visit)}
                           >
                             <div>
-                              <div className="font-medium text-amber-900 dark:text-amber-400">
+                              <div className={`font-medium ${visit.status === "cancelled" ? "text-rose-800 line-through dark:text-rose-400" : "text-amber-900 dark:text-amber-400"}`}>
                                 {getName(visit.contact_id, visit.location_id)}
                               </div>
-                              <div className="text-xs text-amber-700 dark:text-amber-500">
+                              <div className={`text-xs ${visit.status === "cancelled" ? "text-rose-600 dark:text-rose-500" : "text-amber-700 dark:text-amber-500"}`}>
                                 {formatTime12(visit.start_time)} - {formatTime12(visit.end_time)}
                                 {" | "}
                                 {formatVisitCrew(visit, employees, teams) || "Unassigned"}
@@ -640,7 +649,11 @@ export default function SchedulePage() {
                       {dv.slice(0, 3).map((visit) => (
                         <button
                           key={visit.id}
-                          className="w-full text-left rounded px-1 py-0.5 mb-0.5 text-[10px] bg-amber-100 text-amber-800 truncate dark:bg-amber-950/30 dark:text-amber-400 hover:bg-amber-200 transition-colors"
+                          className={`w-full text-left rounded px-1 py-0.5 mb-0.5 text-[10px] truncate transition-colors ${
+                            visit.status === "cancelled"
+                              ? "bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-950/30 dark:text-rose-400 line-through opacity-75"
+                              : "bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-950/30 dark:text-amber-400"
+                          }`}
                           onClick={() => setDetailVisit(visit)}
                         >
                           {getName(visit.contact_id, visit.location_id).split(" ").pop()}

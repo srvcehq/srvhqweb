@@ -269,12 +269,49 @@ export default function SchedulePage() {
     );
   };
 
+  // Overdue = still "scheduled" but date+time has already passed
+  const isVisitOverdue = (visit: MaintenanceVisit): boolean => {
+    if (visit.status !== "scheduled") return false;
+    const [y, mo, d] = visit.visit_date.split("-").map(Number);
+    const [h = 23, m = 59] = (visit.start_time ?? "23:59").split(":").map(Number);
+    return new Date(y, mo - 1, d, h, m) < new Date();
+  };
+
+  // Returns Tailwind classes for a visit pill/card based on status + overdue logic
+  const visitColors = (visit: MaintenanceVisit) => {
+    if (visit.status === "cancelled") return {
+      pill: "bg-gray-100 text-gray-400 border-gray-200 hover:bg-gray-200 line-through opacity-75 dark:bg-gray-800/30 dark:border-gray-700 dark:text-gray-500",
+      card: "bg-gray-50 border-gray-200 hover:bg-gray-100 opacity-75 dark:bg-gray-800/20 dark:border-gray-700",
+      name: "text-gray-500 line-through dark:text-gray-500",
+      sub:  "text-gray-400 dark:text-gray-600",
+    };
+    if (visit.status === "completed") return {
+      pill: "bg-green-100 text-green-700 border-green-200 hover:bg-green-200 dark:bg-green-950/20 dark:border-green-800/40 dark:text-green-400",
+      card: "bg-green-50 border-green-200 hover:bg-green-100 dark:bg-green-950/20 dark:border-green-800/40",
+      name: "text-green-900 dark:text-green-400",
+      sub:  "text-green-700 dark:text-green-500",
+    };
+    if (isVisitOverdue(visit)) return {
+      pill: "bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200 dark:bg-amber-950/20 dark:border-amber-800/40 dark:text-amber-400",
+      card: "bg-amber-50 border-amber-200 hover:bg-amber-100 dark:bg-amber-950/20 dark:border-amber-800/40",
+      name: "text-amber-900 dark:text-amber-400",
+      sub:  "text-amber-700 dark:text-amber-500",
+    };
+    // scheduled, not yet overdue
+    return {
+      pill: "bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200 dark:bg-blue-950/20 dark:border-blue-800/40 dark:text-blue-400",
+      card: "bg-blue-50 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/20 dark:border-blue-800/40",
+      name: "text-blue-900 dark:text-blue-400",
+      sub:  "text-blue-700 dark:text-blue-500",
+    };
+  };
+
   // Status badge
   const statusBadge = (status: string) => {
     const cls: Record<string, string> = {
       scheduled: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
       completed: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-      cancelled: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
+      cancelled: "bg-gray-100 text-gray-500 dark:bg-gray-800/30 dark:text-gray-400",
     };
     return (
       <Badge variant="outline" className={cls[status] || "bg-gray-100 text-gray-700"}>
@@ -498,11 +535,7 @@ export default function SchedulePage() {
                               {dv.map((visit) => (
                                 <button
                                   key={visit.id}
-                                  className={`w-full rounded px-1.5 py-0.5 mb-0.5 text-xs truncate border text-left transition-colors ${
-                                    visit.status === "cancelled"
-                                      ? "bg-rose-100 text-rose-700 border-rose-200 hover:bg-rose-200 dark:bg-rose-950/20 dark:border-rose-800/40 dark:text-rose-400 line-through opacity-75"
-                                      : "bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200 dark:bg-amber-950/20 dark:border-amber-800/40 dark:text-amber-400"
-                                  }`}
+                                  className={`w-full rounded px-1.5 py-0.5 mb-0.5 text-xs truncate border text-left transition-colors ${visitColors(visit).pill}`}
                                   onClick={() => setDetailVisit(visit)}
                                   title={`${getName(visit.contact_id, visit.location_id)} \u2022 ${formatTime12(visit.start_time)} \u2013 ${formatTime12(visit.end_time)}`}
                                 >
@@ -582,30 +615,29 @@ export default function SchedulePage() {
                             </div>
                           </div>
                         ))}
-                        {dv.map((visit) => (
-                          <button
-                            key={visit.id}
-                            className={`w-full rounded-lg px-3 py-2 text-sm border flex items-center justify-between transition-colors text-left ${
-                              visit.status === "cancelled"
-                                ? "bg-rose-50 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/20 dark:border-rose-800/40 opacity-75"
-                                : "bg-amber-50 border-amber-200 hover:bg-amber-100 dark:bg-amber-950/20 dark:border-amber-800/40"
-                            }`}
-                            onClick={() => setDetailVisit(visit)}
-                          >
-                            <div>
-                              <div className={`font-medium ${visit.status === "cancelled" ? "text-rose-800 line-through dark:text-rose-400" : "text-amber-900 dark:text-amber-400"}`}>
-                                {getName(visit.contact_id, visit.location_id)}
+                        {dv.map((visit) => {
+                          const vc = visitColors(visit);
+                          return (
+                            <button
+                              key={visit.id}
+                              className={`w-full rounded-lg px-3 py-2 text-sm border flex items-center justify-between transition-colors text-left ${vc.card}`}
+                              onClick={() => setDetailVisit(visit)}
+                            >
+                              <div>
+                                <div className={`font-medium ${vc.name}`}>
+                                  {getName(visit.contact_id, visit.location_id)}
+                                </div>
+                                <div className={`text-xs ${vc.sub}`}>
+                                  {formatTime12(visit.start_time)} - {formatTime12(visit.end_time)}
+                                  {" | "}
+                                  {formatVisitCrew(visit, employees, teams) || "Unassigned"}
+                                  {visit.duration_minutes && ` | ${visit.duration_minutes} min`}
+                                </div>
                               </div>
-                              <div className={`text-xs ${visit.status === "cancelled" ? "text-rose-600 dark:text-rose-500" : "text-amber-700 dark:text-amber-500"}`}>
-                                {formatTime12(visit.start_time)} - {formatTime12(visit.end_time)}
-                                {" | "}
-                                {formatVisitCrew(visit, employees, teams) || "Unassigned"}
-                                {visit.duration_minutes && ` | ${visit.duration_minutes} min`}
-                              </div>
-                            </div>
-                            {statusBadge(visit.status)}
-                          </button>
-                        ))}
+                              {statusBadge(visit.status)}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   );
@@ -649,11 +681,7 @@ export default function SchedulePage() {
                       {dv.slice(0, 3).map((visit) => (
                         <button
                           key={visit.id}
-                          className={`w-full text-left rounded px-1 py-0.5 mb-0.5 text-[10px] truncate transition-colors ${
-                            visit.status === "cancelled"
-                              ? "bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-950/30 dark:text-rose-400 line-through opacity-75"
-                              : "bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-950/30 dark:text-amber-400"
-                          }`}
+                          className={`w-full text-left rounded px-1 py-0.5 mb-0.5 text-[10px] truncate transition-colors ${visitColors(visit).pill}`}
                           onClick={() => setDetailVisit(visit)}
                         >
                           {getName(visit.contact_id, visit.location_id).split(" ").pop()}

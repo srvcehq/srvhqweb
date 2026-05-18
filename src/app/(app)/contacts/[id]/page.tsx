@@ -4,7 +4,7 @@ import React, { useState, useEffect, use, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { db } from "@/data/api";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useCompany } from "@/providers/company-provider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +17,7 @@ import {
   Map, Copy, Wrench, Plus, Eye, DollarSign,
   ClipboardList, FileText, Building2, Trash2,
   ChevronDown, ChevronRight, Send,
+  Calendar, Clock, Users,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -39,6 +40,7 @@ import { MaintenancePlanDrawer } from "@/components/maintenance/maintenance-plan
 import type { Contact, MaintenancePlan, MaintenanceVisit, Project, Payment, Location } from "@/data/types";
 import { classifyContact } from "@/lib/contact-classification";
 import { useSendCommunication } from "@/hooks/use-send-communication";
+import { useEmployees, formatAssignedCrew } from "@/hooks/use-employee-names";
 
 export default function ContactDetailPage({
   params,
@@ -141,7 +143,20 @@ export default function ContactDetailPage({
   });
 
   const { sendLoginLink, sendInviteLink, resendInviteLink, isSending: isSendingComm } = useSendCommunication();
+  const { data: employees = [] } = useEmployees();
   const isCommercial = contact?.contact_type === "commercial";
+
+  const archivePlanMutation = useMutation({
+    mutationFn: (planId: string) =>
+      db.MaintenancePlan.update(planId, { deleted_at: new Date().toISOString() }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["maintenance-plans"] });
+      toast.success("Plan archived.");
+    },
+    onError: () => {
+      toast.error("Failed to archive plan.");
+    },
+  });
 
   // Auto-open edit plan dialog when navigated with ?editPlan= query param
   const editPlanId = searchParams.get("editPlan");
@@ -209,6 +224,102 @@ export default function ContactDetailPage({
     const addressString = addressParts.join(" ");
     const encodedAddress = encodeURIComponent(addressString);
     window.open(`https://www.google.com/maps/search/?api=1&query=${encodedAddress}`, "_blank");
+  };
+
+  const DAY_NAMES = [
+    "Sunday", "Monday", "Tuesday", "Wednesday",
+    "Thursday", "Friday", "Saturday",
+  ];
+
+  const formatFrequencyLine = (plan: MaintenancePlan) => {
+    const freq = plan.frequency.charAt(0).toUpperCase() + plan.frequency.slice(1);
+    if (typeof plan.day_of_week === "number" && plan.day_of_week >= 0 && plan.day_of_week < 7) {
+      return `${freq} · Every ${DAY_NAMES[plan.day_of_week]}`;
+    }
+    return freq;
+  };
+
+  const formatSeasonLine = (plan: MaintenancePlan) => {
+    if (plan.end_date) {
+      return `Season: Until ${new Date(plan.end_date).toLocaleDateString()}`;
+    }
+    return "Season: Year-round";
+  };
+
+  const renderActivePlanCard = (
+    plan: MaintenancePlan,
+    nextVisit: MaintenanceVisit | undefined,
+  ) => {
+    const isActive = plan.status === "active";
+    const assigned = formatAssignedCrew(plan.assigned_employee_ids, employees, { maxDisplay: 3 });
+
+    return (
+      <Card className="border-green-200 bg-green-50/60 dark:border-green-900/40 dark:bg-green-900/10 shadow-sm">
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap">
+              <Badge className="bg-green-600 hover:bg-green-600 text-white font-bold tracking-wide px-3 py-1 rounded-md uppercase text-xs">
+                {isActive ? "Active Plan" : plan.status}
+              </Badge>
+              <h3 className="font-bold text-foreground text-2xl leading-tight">
+                {plan.title || "Maintenance Plan"}
+              </h3>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditingPlan(plan)}
+              >
+                <Pencil className="w-4 h-4 mr-1.5" />
+                Edit Plan
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900/40 dark:text-red-400 dark:hover:bg-red-950/40"
+                disabled={archivePlanMutation.isPending}
+                onClick={() => {
+                  if (window.confirm("Archive this maintenance plan? It will be hidden from the active list.")) {
+                    archivePlanMutation.mutate(plan.id);
+                  }
+                }}
+              >
+                <Archive className="w-4 h-4 mr-1.5" />
+                Archive
+              </Button>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+            <div className="flex items-center gap-2 text-foreground">
+              <Calendar className="w-4 h-4 text-green-600 shrink-0" />
+              <span className="font-semibold">{formatFrequencyLine(plan)}</span>
+            </div>
+            <div className="text-foreground">
+              <span className="text-muted-foreground">Next Visit: </span>
+              <span className="font-bold text-green-700 dark:text-green-400">
+                {nextVisit
+                  ? new Date(nextVisit.visit_date).toLocaleDateString("en-US", {
+                      weekday: "long",
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })
+                  : "None scheduled"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-foreground">
+              <Clock className="w-4 h-4 text-green-600 shrink-0" />
+              <span>{formatSeasonLine(plan)}</span>
+            </div>
+            <div className="flex items-center gap-2 text-foreground">
+              <Users className="w-4 h-4 text-green-600 shrink-0" />
+              <span>Assigned: {assigned}</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
   };
 
   const handleCopyAddress = async () => {
@@ -1437,62 +1548,7 @@ export default function ContactDetailPage({
 
                             return (
                               <div key={plan.id} className="space-y-4">
-                                {/* Active Plan Card */}
-                                <Card className="shadow-sm">
-                                  <CardContent className="p-4">
-                                    <div className="flex items-center justify-between mb-3">
-                                      <h3 className="font-semibold text-foreground text-lg">
-                                        {plan.title || "Maintenance Plan"}
-                                      </h3>
-                                      <div className="flex items-center gap-2">
-                                        <Badge
-                                          className={
-                                            plan.status === "active"
-                                              ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                              : "bg-gray-100 text-gray-700 dark:bg-gray-800/40 dark:text-gray-400"
-                                          }
-                                        >
-                                          {plan.status}
-                                        </Badge>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-7 text-xs"
-                                          onClick={() => setEditingPlan(plan)}
-                                        >
-                                          <Pencil className="w-3 h-3 mr-1" />
-                                          Edit Plan
-                                        </Button>
-                                      </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                      <div>
-                                        <p className="text-muted-foreground">Frequency</p>
-                                        <p className="font-medium capitalize">{plan.frequency}</p>
-                                      </div>
-                                      <div>
-                                        <p className="text-muted-foreground">Next Visit</p>
-                                        <p className="font-medium">
-                                          {nextVisit
-                                            ? new Date(nextVisit.visit_date).toLocaleDateString()
-                                            : "None scheduled"}
-                                        </p>
-                                      </div>
-                                      <div>
-                                        <p className="text-muted-foreground">Price/Visit</p>
-                                        <p className="font-medium">${plan.price_per_visit?.toFixed(2) || "0.00"}</p>
-                                      </div>
-                                      <div>
-                                        <p className="text-muted-foreground">Assigned Crew</p>
-                                        <p className="font-medium">
-                                          {plan.assigned_team_id || plan.assigned_employee_ids?.length
-                                            ? `${plan.assigned_employee_ids?.length || 0} member(s)`
-                                            : "Unassigned"}
-                                        </p>
-                                      </div>
-                                    </div>
-                                  </CardContent>
-                                </Card>
+                                {renderActivePlanCard(plan, nextVisit)}
 
                                 {/* Upcoming / Scheduled Visits */}
                                 {(upcomingScheduled.length > 0 || overdueVisits.length > 0) && (
@@ -1831,62 +1887,7 @@ export default function ContactDetailPage({
 
                   return (
                     <div key={plan.id} className="space-y-4">
-                      {/* Active Plan Card */}
-                      <Card className="shadow-sm">
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <h3 className="font-semibold text-foreground text-lg">
-                              {plan.title || "Maintenance Plan"}
-                            </h3>
-                            <div className="flex items-center gap-2">
-                              <Badge
-                                className={
-                                  plan.status === "active"
-                                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                    : "bg-gray-100 text-gray-700 dark:bg-gray-800/40 dark:text-gray-400"
-                                }
-                              >
-                                {plan.status}
-                              </Badge>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 text-xs"
-                                onClick={() => setEditingPlan(plan)}
-                              >
-                                <Pencil className="w-3 h-3 mr-1" />
-                                Edit Plan
-                              </Button>
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                            <div>
-                              <p className="text-muted-foreground">Frequency</p>
-                              <p className="font-medium capitalize">{plan.frequency}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Next Visit</p>
-                              <p className="font-medium">
-                                {nextVisit
-                                  ? new Date(nextVisit.visit_date).toLocaleDateString()
-                                  : "None scheduled"}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Price/Visit</p>
-                              <p className="font-medium">${plan.price_per_visit?.toFixed(2) || "0.00"}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Assigned Crew</p>
-                              <p className="font-medium">
-                                {plan.assigned_team_id || plan.assigned_employee_ids?.length
-                                  ? `${plan.assigned_employee_ids?.length || 0} member(s)`
-                                  : "Unassigned"}
-                              </p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
+                      {renderActivePlanCard(plan, nextVisit)}
 
                       {/* Upcoming / Scheduled Visits */}
                       {(upcomingScheduled.length > 0 || overdueVisits.length > 0) && (

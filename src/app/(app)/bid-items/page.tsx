@@ -116,30 +116,42 @@ export default function BidItemsPage() {
   const [newCategoryInput, setNewCategoryInput] = useState("");
   const [extraCategories, setExtraCategories] = useState<string[]>([]);
 
-  // Load items on mount
+  // Categories saved independently in the item_categories table
+  const [dbCategories, setDbCategories] = useState<string[]>([]);
+
+  // Load items and saved categories on mount
   React.useEffect(() => {
     async function load() {
-      const data = await db.ItemsCatalog.filter({ company_id: currentCompanyId });
-      setItems(data);
+      const [itemData, catData] = await Promise.all([
+        db.ItemsCatalog.filter({ company_id: currentCompanyId }),
+        db.ItemCategory.filter({ company_id: currentCompanyId }),
+      ]);
+      setItems(itemData);
+      setDbCategories(catData.map((c) => c.name).sort());
       setLoading(false);
     }
     load();
   }, [currentCompanyId]);
 
   // Derive categories from items
-  const categories = useMemo(() => {
+  const itemCategories = useMemo(() => {
     const cats = new Set<string>();
     items.forEach((item) => {
       if (item.category) cats.add(item.category);
     });
-    return Array.from(cats).sort();
+    return Array.from(cats);
   }, [items]);
 
-  // All categories available in the modal dropdown (existing + session-created)
+  // All categories for the sidebar: DB-saved + item-derived, deduped and sorted
+  const sidebarCategories = useMemo(() => {
+    return Array.from(new Set([...dbCategories, ...itemCategories])).sort();
+  }, [dbCategories, itemCategories]);
+
+  // All categories available in the modal dropdown (sidebar + session-created)
   const allDropdownCategories = useMemo(() => {
-    const combined = new Set([...categories, ...extraCategories]);
+    const combined = new Set([...sidebarCategories, ...extraCategories]);
     return Array.from(combined).sort();
-  }, [categories, extraCategories]);
+  }, [sidebarCategories, extraCategories]);
 
   // Filter items
   const filteredItems = useMemo(() => {
@@ -161,7 +173,7 @@ export default function BidItemsPage() {
 
   const resetForm = (pricingStrategy: ItemsCatalog["pricing_strategy"] = "cost_plus") => ({
     name: "",
-    category: selectedCategory || categories[0] || "",
+    category: selectedCategory || sidebarCategories[0] || "",
     unit: "ea" as ItemsCatalog["unit"],
     pricing_strategy: pricingStrategy,
     default_unit_cost: 0,
@@ -241,9 +253,20 @@ export default function BidItemsPage() {
     setNewCategoryInput("");
   };
 
-const handleAddCategory = () => {
-    if (!newCategoryName.trim()) return;
-    setSelectedCategory(newCategoryName.trim());
+const handleAddCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    try {
+      await db.ItemCategory.create({
+        company_id: currentCompanyId,
+        name,
+        sort_order: dbCategories.length,
+      });
+      setDbCategories((prev) => Array.from(new Set([...prev, name])).sort());
+      setSelectedCategory(name);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save category");
+    }
     setShowCategoryDialog(false);
     setNewCategoryName("");
   };
@@ -326,7 +349,7 @@ const handleAddCategory = () => {
                       {items.length}
                     </span>
                   </button>
-                  {categories.map((cat) => {
+                  {sidebarCategories.map((cat) => {
                     const count = items.filter((i) => i.category === cat).length;
                     return (
                       <button

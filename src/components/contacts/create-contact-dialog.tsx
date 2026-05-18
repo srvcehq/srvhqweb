@@ -416,38 +416,15 @@ export default function CreateContactDialog({
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back
               </Button>
-              <div className="flex gap-2">
-                {onCreateMaintenancePlan && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={createMutation.isPending}
-                    onClick={(e) => {
-                      const form = (e.currentTarget as HTMLButtonElement).closest("form");
-                      if (form && form.checkValidity()) {
-                        const syntheticEvent = { preventDefault: () => {} } as React.FormEvent;
-                        handleSubmit(syntheticEvent, { createMaintenancePlan: true });
-                      } else {
-                        form?.reportValidity();
-                      }
-                    }}
-                    className="border-green-300 text-green-700 hover:bg-green-50"
-                  >
-                    {createMutation.isPending && pendingMaintenancePlan
-                      ? "Creating..."
-                      : "Create Maintenance Plan"}
-                  </Button>
-                )}
-                <Button
-                  type="submit"
-                  disabled={createMutation.isPending}
-                  className="bg-gradient-to-r from-green-500 to-emerald-600"
-                >
-                  {createMutation.isPending && !pendingMaintenancePlan
-                    ? "Creating..."
-                    : "Create Lead"}
-                </Button>
-              </div>
+              <Button
+                type="submit"
+                disabled={createMutation.isPending}
+                className="bg-gradient-to-r from-green-500 to-emerald-600"
+              >
+                {createMutation.isPending && !pendingMaintenancePlan
+                  ? "Creating..."
+                  : "Create Lead"}
+              </Button>
             </div>
           </form>
         )}

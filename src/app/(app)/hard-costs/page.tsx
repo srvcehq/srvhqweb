@@ -433,35 +433,47 @@ export default function HardCostsPage() {
                     required
                   />
                 </div>
-                {formData.monthly_cost > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    Daily: {formatCurrency(formData.monthly_cost / 30)}
-                  </p>
-                )}
               </div>
               <div className="space-y-2">
-                <Label>Category</Label>
-                <Select
-                  value={formData.category || "other"}
-                  onValueChange={(val) =>
-                    setFormData({
-                      ...formData,
-                      category: val as HardCost["category"],
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map((cat) => (
-                      <SelectItem key={cat.value} value={cat.value!}>
-                        {cat.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Daily Cost (Monthly ÷ 30)</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">
+                    $
+                  </span>
+                  <Input
+                    type="text"
+                    value={(formData.monthly_cost / 30).toFixed(2)}
+                    readOnly
+                    disabled
+                    className="pl-7"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Calculated automatically.</p>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <Select
+                value={formData.category || "other"}
+                onValueChange={(val) =>
+                  setFormData({
+                    ...formData,
+                    category: val as HardCost["category"],
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map((cat) => (
+                    <SelectItem key={cat.value} value={cat.value!}>
+                      {cat.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">

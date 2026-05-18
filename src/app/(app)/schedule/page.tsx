@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/data/api";
 import { useCompany } from "@/providers/company-provider";
 import { formatAssignedCrew, formatVisitCrew } from "@/hooks/use-employee-names";
-import { isoDate, addDays, startOfWeek, startOfMonth, formatTime12, todayStr } from "@/lib/format-helpers";
+import { isoDate, addDays, startOfWeek, startOfMonth, formatTime12, addMinutesToTime, todayStr } from "@/lib/format-helpers";
 import { queryKeys } from "@/lib/query-keys";
 import { toast } from "sonner";
 import type { MaintenanceVisit, Location, Employee, Payment } from "@/data/types";
@@ -211,6 +211,17 @@ export default function SchedulePage() {
       queryClient.invalidateQueries({ queryKey: queryKeys.maintenanceVisits(currentCompanyId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.payments(currentCompanyId) });
       toast.success("Visit completed. Payment created.");
+      setDetailVisit(null);
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: async (visitId: string) => {
+      await db.MaintenanceVisit.update(visitId, { status: "cancelled" });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.maintenanceVisits(currentCompanyId) });
+      toast.success("Visit cancelled.");
       setDetailVisit(null);
     },
   });
@@ -721,7 +732,9 @@ export default function SchedulePage() {
                   <div>
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-0.5">Time</p>
                     <p className="font-medium">
-                      {formatTime12(detailVisit.start_time)} \u2013 {formatTime12(detailVisit.end_time)}
+                      {detailVisit.start_time
+                        ? `${formatTime12(detailVisit.start_time)} \u2013 ${formatTime12(addMinutesToTime(detailVisit.start_time, detailVisit.duration_minutes ?? 0))}`
+                        : "\u2014"}
                     </p>
                   </div>
                   <div>
@@ -778,14 +791,23 @@ export default function SchedulePage() {
                 {/* Actions */}
                 <div className="flex flex-wrap gap-2 pt-4 border-t">
                   {!isCompleted && (
-                    <Button
-                      className="bg-gradient-to-r from-green-500 to-emerald-600"
-                      onClick={() => markCompleteMutation.mutate(detailVisit.id)}
-                      disabled={markCompleteMutation.isPending}
-                    >
-                      <CheckCircle2 className="w-4 h-4 mr-1.5" />
-                      {markCompleteMutation.isPending ? "Completing..." : "Mark Complete"}
-                    </Button>
+                    <>
+                      <Button
+                        className="bg-gradient-to-r from-green-500 to-emerald-600"
+                        onClick={() => markCompleteMutation.mutate(detailVisit.id)}
+                        disabled={markCompleteMutation.isPending || cancelMutation.isPending}
+                      >
+                        <CheckCircle2 className="w-4 h-4 mr-1.5" />
+                        {markCompleteMutation.isPending ? "Completing..." : "Mark Complete"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => cancelMutation.mutate(detailVisit.id)}
+                        disabled={cancelMutation.isPending || markCompleteMutation.isPending}
+                      >
+                        {cancelMutation.isPending ? "Cancelling..." : "Cancel Job"}
+                      </Button>
+                    </>
                   )}
 
                   {isCompleted && detailVisit.amountDue && (

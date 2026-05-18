@@ -200,16 +200,23 @@ export default function BidItemsPage() {
       ? newCategoryInput.trim()
       : itemForm.category;
     const resolvedUnit = creatingUnit && newUnitInput.trim()
-      ? newUnitInput.trim() as ItemsCatalog["unit"]
+      ? newUnitInput.trim()
       : itemForm.unit;
 
     if (creatingCategory) { setCreatingCategory(false); setNewCategoryInput(""); }
     if (creatingUnit)     { setCreatingUnit(false);     setNewUnitInput(""); }
 
+    // Supabase unit column only accepts the standard enum values — map any
+    // custom unit label to "other" so the constraint is never violated.
+    const validUnits: ItemsCatalog["unit"][] = ["ea", "sq_ft", "ton", "hr", "other"];
+    const safeUnit: ItemsCatalog["unit"] = validUnits.includes(resolvedUnit as ItemsCatalog["unit"])
+      ? resolvedUnit as ItemsCatalog["unit"]
+      : "other";
+
     const data = {
       ...itemForm,
       category: resolvedCategory,
-      unit: resolvedUnit,
+      unit: safeUnit,
       company_id: currentCompanyId,
       default_unit_cost: parseFloat(String(itemForm.default_unit_cost)) || 0,
       default_sell_price: parseFloat(String(itemForm.default_sell_price)) || 0,

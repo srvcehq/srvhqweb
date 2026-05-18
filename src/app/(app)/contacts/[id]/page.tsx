@@ -57,6 +57,7 @@ export default function ContactDetailPage({
   const [showCreateLocation, setShowCreateLocation] = useState(false);
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
   const [expandedLocationIds, setExpandedLocationIds] = useState<Record<string, boolean>>({});
+  const [visitsExpanded, setVisitsExpanded] = useState<Record<string, boolean>>({});
   const [editingPlan, setEditingPlan] = useState<MaintenancePlan | null>(null);
   const [showMaintenanceDrawer, setShowMaintenanceDrawer] = useState(false);
   const searchParams = useSearchParams();
@@ -323,6 +324,7 @@ export default function ContactDetailPage({
   };
 
   const renderVisitsSection = (
+    planId: string,
     upcomingScheduled: MaintenanceVisit[],
     overdueVisits: MaintenanceVisit[],
     today: string,
@@ -332,10 +334,30 @@ export default function ContactDetailPage({
     );
     if (visits.length === 0) return null;
 
+    const isExpanded = !!visitsExpanded[planId];
+    const toggle = () =>
+      setVisitsExpanded((prev) => ({ ...prev, [planId]: !prev[planId] }));
+
     return (
       <Card className="shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between gap-3 px-5 py-4 bg-blue-50/60 dark:bg-blue-950/20 border-b">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={toggle}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              toggle();
+            }
+          }}
+          className="flex items-center justify-between gap-3 px-5 py-4 bg-blue-50/60 dark:bg-blue-950/20 cursor-pointer hover:bg-blue-100/60 dark:hover:bg-blue-950/40 transition-colors"
+        >
           <div className="flex items-center gap-2">
+            {isExpanded ? (
+              <ChevronDown className="w-4 h-4 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            )}
             <Calendar className="w-5 h-5 text-blue-600" />
             <h3 className="font-bold text-foreground text-base">Visits</h3>
           </div>
@@ -351,14 +373,18 @@ export default function ContactDetailPage({
             <Button
               size="sm"
               className="bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={() => toast.info("Add One Time Visit coming soon.")}
+              onClick={(e) => {
+                e.stopPropagation();
+                toast.info("Add One Time Visit coming soon.");
+              }}
             >
               <Plus className="w-4 h-4 mr-1" />
               Add One Time Visit
             </Button>
           </div>
         </div>
-        <div className="divide-y">
+        {isExpanded && (
+        <div className="divide-y border-t">
           {visits.map((visit) => {
             const isOverdue = visit.visit_date < today;
             const dateObj = new Date(visit.visit_date);
@@ -422,6 +448,7 @@ export default function ContactDetailPage({
             );
           })}
         </div>
+        )}
       </Card>
     );
   };
@@ -1654,7 +1681,7 @@ export default function ContactDetailPage({
                               <div key={plan.id} className="space-y-4">
                                 {renderActivePlanCard(plan, nextVisit)}
 
-                                {renderVisitsSection(upcomingScheduled, overdueVisits, today)}
+                                {renderVisitsSection(plan.id, upcomingScheduled, overdueVisits, today)}
 
                                 {/* Service History */}
                                 {historyVisits.length > 0 && (
@@ -1783,7 +1810,7 @@ export default function ContactDetailPage({
                               </CardContent>
                             </Card>
 
-                            {renderVisitsSection(upcomingScheduled, overdueVisits, today)}
+                            {renderVisitsSection(plan.id, upcomingScheduled, overdueVisits, today)}
 
                             {historyVisits.length > 0 && (
                               <Card className="shadow-sm">
@@ -1886,7 +1913,7 @@ export default function ContactDetailPage({
                     <div key={plan.id} className="space-y-4">
                       {renderActivePlanCard(plan, nextVisit)}
 
-                      {renderVisitsSection(upcomingScheduled, overdueVisits, today)}
+                      {renderVisitsSection(plan.id, upcomingScheduled, overdueVisits, today)}
 
                       {/* Service History */}
                       {historyVisits.length > 0 && (

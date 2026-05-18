@@ -17,7 +17,7 @@ import {
   Map, Copy, Wrench, Plus, Eye, DollarSign,
   ClipboardList, FileText, Building2, Trash2,
   ChevronDown, ChevronRight, Send,
-  Calendar, Clock, Users,
+  Calendar, Clock, Users, CheckCircle2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -58,6 +58,7 @@ export default function ContactDetailPage({
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
   const [expandedLocationIds, setExpandedLocationIds] = useState<Record<string, boolean>>({});
   const [visitsExpanded, setVisitsExpanded] = useState<Record<string, boolean>>({});
+  const [historyExpanded, setHistoryExpanded] = useState<Record<string, boolean>>({});
   const [editingPlan, setEditingPlan] = useState<MaintenancePlan | null>(null);
   const [showMaintenanceDrawer, setShowMaintenanceDrawer] = useState(false);
   const searchParams = useSearchParams();
@@ -448,6 +449,137 @@ export default function ContactDetailPage({
             );
           })}
         </div>
+        )}
+      </Card>
+    );
+  };
+
+  const renderServiceHistorySection = (
+    planId: string,
+    historyVisits: MaintenanceVisit[],
+  ) => {
+    if (historyVisits.length === 0) return null;
+
+    const sorted = [...historyVisits].sort((a, b) =>
+      b.visit_date.localeCompare(a.visit_date),
+    );
+    const paidCount = historyVisits.filter((v) => v.payment_status === "paid").length;
+    const unpaidCount = historyVisits.length - paidCount;
+    const isExpanded = !!historyExpanded[planId];
+    const toggle = () =>
+      setHistoryExpanded((prev) => ({ ...prev, [planId]: !prev[planId] }));
+
+    return (
+      <Card className="shadow-sm overflow-hidden">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={toggle}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              toggle();
+            }
+          }}
+          className="flex items-center justify-between gap-3 px-5 py-4 bg-purple-50/60 dark:bg-purple-950/20 cursor-pointer hover:bg-purple-100/60 dark:hover:bg-purple-950/40 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5 text-purple-600" />
+            <h3 className="font-bold text-foreground text-base">Service History</h3>
+          </div>
+          <div className="flex items-center gap-4 text-sm">
+            <span>
+              <span className="text-muted-foreground">Paid: </span>
+              <span className="font-bold text-green-600">{paidCount}</span>
+            </span>
+            <span>
+              <span className="text-muted-foreground">Unpaid: </span>
+              <span className="font-bold text-red-600">{unpaidCount}</span>
+            </span>
+            {isExpanded ? (
+              <ChevronDown className="w-4 h-4 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            )}
+          </div>
+        </div>
+        {isExpanded && (
+          <div className="border-t p-5 space-y-3 relative">
+            {sorted.map((visit, idx) => {
+              const dateObj = new Date(visit.visit_date);
+              const dateLine = dateObj.toLocaleDateString("en-US", {
+                weekday: "long",
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              });
+              const crew = formatAssignedCrew(visit.assigned_employee_ids, employees, { maxDisplay: 2 });
+              const crewText = visit.assigned_employee_ids?.length ? crew : "Not assigned";
+              const payment = visit.payment_status || "unpaid";
+              const isCompleted = visit.status === "completed";
+              const isLast = idx === sorted.length - 1;
+
+              return (
+                <div key={visit.id} className="flex gap-4">
+                  <div className="flex flex-col items-center">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/30 ring-1 ring-purple-200 dark:ring-purple-900/40">
+                      <CheckCircle2 className="w-5 h-5 text-purple-600" />
+                    </div>
+                    {!isLast && (
+                      <div className="flex-1 w-px bg-purple-200 dark:bg-purple-900/40 my-1" />
+                    )}
+                  </div>
+                  <div className="flex-1 rounded-lg border bg-card px-4 py-3">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div>
+                        <div className="font-bold text-foreground">
+                          {visit.service_performed || "General maintenance"}
+                        </div>
+                        <div className="text-sm text-muted-foreground">{dateLine}</div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {isCompleted && (
+                          <Badge className="bg-green-600 hover:bg-green-600 text-white">
+                            Completed
+                          </Badge>
+                        )}
+                        {payment === "paid" && (
+                          <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-900/40">
+                            Paid
+                          </Badge>
+                        )}
+                        {payment === "processing" && (
+                          <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100 border border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-900/40">
+                            Processing
+                          </Badge>
+                        )}
+                        {payment === "unpaid" && (
+                          <Badge
+                            variant="outline"
+                            className="font-normal text-muted-foreground"
+                          >
+                            Pay link not sent
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <div className="text-xs text-muted-foreground">Crew</div>
+                        <div className="font-medium">{crewText}</div>
+                      </div>
+                      {typeof visit.duration_minutes === "number" && (
+                        <div>
+                          <div className="text-xs text-muted-foreground">Time Spent</div>
+                          <div className="font-medium">{visit.duration_minutes} minutes</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </Card>
     );
@@ -1683,58 +1815,7 @@ export default function ContactDetailPage({
 
                                 {renderVisitsSection(plan.id, upcomingScheduled, overdueVisits, today)}
 
-                                {/* Service History */}
-                                {historyVisits.length > 0 && (
-                                  <Card className="shadow-sm">
-                                    <CardHeader className="pb-3">
-                                      <CardTitle className="text-base">Service History</CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                      <div className="rounded-lg border">
-                                        <Table>
-                                          <TableHeader>
-                                            <TableRow>
-                                              <TableHead>Date</TableHead>
-                                              <TableHead>Service</TableHead>
-                                              <TableHead>Status</TableHead>
-                                              <TableHead>Payment</TableHead>
-                                            </TableRow>
-                                          </TableHeader>
-                                          <TableBody>
-                                            {historyVisits
-                                              .sort((a, b) => b.visit_date.localeCompare(a.visit_date))
-                                              .map((visit) => (
-                                                <TableRow key={visit.id}>
-                                                  <TableCell className="font-medium">
-                                                    {new Date(visit.visit_date).toLocaleDateString()}
-                                                  </TableCell>
-                                                  <TableCell>{visit.service_performed || "General maintenance"}</TableCell>
-                                                  <TableCell>
-                                                    <Badge className={
-                                                      visit.status === "completed"
-                                                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                                        : "bg-gray-100 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400"
-                                                    }>
-                                                      {visit.status}
-                                                    </Badge>
-                                                  </TableCell>
-                                                  <TableCell>
-                                                    <Badge className={
-                                                      visit.payment_status === "paid"
-                                                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                                        : "bg-gray-100 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400"
-                                                    }>
-                                                      {visit.payment_status || "unpaid"}
-                                                    </Badge>
-                                                  </TableCell>
-                                                </TableRow>
-                                              ))}
-                                          </TableBody>
-                                        </Table>
-                                      </div>
-                                    </CardContent>
-                                  </Card>
-                                )}
+                                {renderServiceHistorySection(plan.id, historyVisits)}
                               </div>
                             );
                           })}
@@ -1812,57 +1893,7 @@ export default function ContactDetailPage({
 
                             {renderVisitsSection(plan.id, upcomingScheduled, overdueVisits, today)}
 
-                            {historyVisits.length > 0 && (
-                              <Card className="shadow-sm">
-                                <CardHeader className="pb-3">
-                                  <CardTitle className="text-base">Service History</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                  <div className="rounded-lg border">
-                                    <Table>
-                                      <TableHeader>
-                                        <TableRow>
-                                          <TableHead>Date</TableHead>
-                                          <TableHead>Service</TableHead>
-                                          <TableHead>Status</TableHead>
-                                          <TableHead>Payment</TableHead>
-                                        </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
-                                        {historyVisits
-                                          .sort((a, b) => b.visit_date.localeCompare(a.visit_date))
-                                          .map((visit) => (
-                                            <TableRow key={visit.id}>
-                                              <TableCell className="font-medium">
-                                                {new Date(visit.visit_date).toLocaleDateString()}
-                                              </TableCell>
-                                              <TableCell>{visit.service_performed || "General maintenance"}</TableCell>
-                                              <TableCell>
-                                                <Badge className={
-                                                  visit.status === "completed"
-                                                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                                    : "bg-gray-100 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400"
-                                                }>
-                                                  {visit.status}
-                                                </Badge>
-                                              </TableCell>
-                                              <TableCell>
-                                                <Badge className={
-                                                  visit.payment_status === "paid"
-                                                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                                    : "bg-gray-100 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400"
-                                                }>
-                                                  {visit.payment_status || "unpaid"}
-                                                </Badge>
-                                              </TableCell>
-                                            </TableRow>
-                                          ))}
-                                      </TableBody>
-                                    </Table>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            )}
+                            {renderServiceHistorySection(plan.id, historyVisits)}
                           </div>
                         );
                       })}
@@ -1915,58 +1946,7 @@ export default function ContactDetailPage({
 
                       {renderVisitsSection(plan.id, upcomingScheduled, overdueVisits, today)}
 
-                      {/* Service History */}
-                      {historyVisits.length > 0 && (
-                        <Card className="shadow-sm">
-                          <CardHeader className="pb-3">
-                            <CardTitle className="text-base">Service History</CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="rounded-lg border">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Date</TableHead>
-                                    <TableHead>Service</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead>Payment</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {historyVisits
-                                    .sort((a, b) => b.visit_date.localeCompare(a.visit_date))
-                                    .map((visit) => (
-                                      <TableRow key={visit.id}>
-                                        <TableCell className="font-medium">
-                                          {new Date(visit.visit_date).toLocaleDateString()}
-                                        </TableCell>
-                                        <TableCell>{visit.service_performed || "General maintenance"}</TableCell>
-                                        <TableCell>
-                                          <Badge className={
-                                            visit.status === "completed"
-                                              ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                              : "bg-gray-100 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400"
-                                          }>
-                                            {visit.status}
-                                          </Badge>
-                                        </TableCell>
-                                        <TableCell>
-                                          <Badge className={
-                                            visit.payment_status === "paid"
-                                              ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                              : "bg-gray-100 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400"
-                                          }>
-                                            {visit.payment_status || "unpaid"}
-                                          </Badge>
-                                        </TableCell>
-                                      </TableRow>
-                                    ))}
-                                </TableBody>
-                              </Table>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      )}
+                      {renderServiceHistorySection(plan.id, historyVisits)}
                     </div>
                   );
                 })}

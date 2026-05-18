@@ -96,12 +96,14 @@ function NumericInput({
   className,
   prefix,
   suffix,
+  placeholder,
 }: {
   value: number;
   onChange: (v: number) => void;
   className?: string;
   prefix?: string;
   suffix?: string;
+  placeholder?: string;
 }) {
   const [display, setDisplay] = useState(String(value));
   const [focused, setFocused] = useState(false);
@@ -122,6 +124,7 @@ function NumericInput({
         inputMode="decimal"
         className={cn(className, prefix && "pl-7", suffix && "pr-8")}
         value={display}
+        placeholder={placeholder}
         onFocus={(e) => {
           setFocused(true);
           if (value === 0) setDisplay("");
@@ -133,6 +136,12 @@ function NumericInput({
             setDisplay(raw);
             onChange(raw === "" ? 0 : parseFloat(raw) || 0);
           }
+        }}
+        onKeyDown={(e) => {
+          const allowed = ["Backspace", "Delete", "Tab", "Escape", "Enter", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "."];
+          if (allowed.includes(e.key)) return;
+          if ((e.ctrlKey || e.metaKey) && ["a", "c", "v", "x"].includes(e.key.toLowerCase())) return;
+          if (!/^\d$/.test(e.key)) e.preventDefault();
         }}
         onBlur={() => {
           setFocused(false);
@@ -350,6 +359,9 @@ export default function LiveEstimatePage() {
                     prefix="$"
                     className="h-8 text-sm mt-0.5"
                   />
+                  <p className="text-[10px] text-green-600/70 dark:text-green-400/60 mt-1 leading-tight">
+                    Added on top of total — not included in markup calculation.
+                  </p>
                 </div>
               </div>
               {preMarkedTotal > 0 && markup > 0 && (
@@ -537,7 +549,8 @@ export default function LiveEstimatePage() {
                   <NumericInput
                     value={crewSize}
                     onChange={setCrewSize}
-                    className="mt-1.5"
+                    placeholder="e.g. 2"
+                    className="mt-1.5 text-muted-foreground"
                   />
                 </div>
                 <div>
@@ -545,7 +558,8 @@ export default function LiveEstimatePage() {
                   <NumericInput
                     value={workingDays}
                     onChange={setWorkingDays}
-                    className="mt-1.5"
+                    placeholder="e.g. 3"
+                    className="mt-1.5 text-muted-foreground"
                   />
                 </div>
                 <div>
@@ -553,7 +567,8 @@ export default function LiveEstimatePage() {
                   <NumericInput
                     value={hoursPerDay}
                     onChange={setHoursPerDay}
-                    className="mt-1.5"
+                    placeholder="e.g. 8"
+                    className="mt-1.5 text-muted-foreground"
                   />
                 </div>
                 <div>
@@ -562,7 +577,8 @@ export default function LiveEstimatePage() {
                     value={hourlyRate}
                     onChange={setHourlyRate}
                     prefix="$"
-                    className="mt-1.5"
+                    placeholder="e.g. 45"
+                    className="mt-1.5 text-muted-foreground"
                   />
                 </div>
               </div>

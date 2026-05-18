@@ -163,6 +163,74 @@ function NumericInput({
   );
 }
 
+/* NullableNumericInput — same as NumericInput but defaults to empty   */
+/* ------------------------------------------------------------------ */
+
+function NullableNumericInput({
+  value,
+  onChange,
+  className,
+  prefix,
+  placeholder,
+}: {
+  value: number | null;
+  onChange: (v: number | null) => void;
+  className?: string;
+  prefix?: string;
+  placeholder?: string;
+}) {
+  const [display, setDisplay] = useState(value !== null ? String(value) : "");
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused) setDisplay(value !== null ? String(value) : "");
+  }, [value, focused]);
+
+  return (
+    <div className="relative">
+      {prefix && (
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">
+          {prefix}
+        </span>
+      )}
+      <Input
+        type="text"
+        inputMode="decimal"
+        className={cn(className, prefix && "pl-7")}
+        value={display}
+        placeholder={placeholder}
+        onFocus={(e) => {
+          setFocused(true);
+          e.target.select();
+        }}
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (raw === "" || /^\d*\.?\d*$/.test(raw)) {
+            setDisplay(raw);
+            onChange(raw === "" ? null : parseFloat(raw) || 0);
+          }
+        }}
+        onKeyDown={(e) => {
+          const allowed = ["Backspace", "Delete", "Tab", "Escape", "Enter", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "."];
+          if (allowed.includes(e.key)) return;
+          if ((e.ctrlKey || e.metaKey) && ["a", "c", "v", "x"].includes(e.key.toLowerCase())) return;
+          if (!/^\d$/.test(e.key)) e.preventDefault();
+        }}
+        onBlur={() => {
+          setFocused(false);
+          if (display === "" || display === ".") {
+            setDisplay("");
+            onChange(null);
+          } else {
+            setDisplay(String(parseFloat(display) || 0));
+          }
+        }}
+        onWheel={(e) => (e.target as HTMLElement).blur()}
+      />
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Page                                                                */
 /* ------------------------------------------------------------------ */
@@ -192,10 +260,10 @@ export default function LiveEstimatePage() {
 
   /* ---- state ---- */
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
-  const [crewSize, setCrewSize] = useState(2);
-  const [workingDays, setWorkingDays] = useState(1);
-  const [hoursPerDay, setHoursPerDay] = useState(8);
-  const [hourlyRate, setHourlyRate] = useState(0);
+  const [crewSize, setCrewSize] = useState<number | null>(null);
+  const [workingDays, setWorkingDays] = useState<number | null>(null);
+  const [hoursPerDay, setHoursPerDay] = useState<number | null>(null);
+  const [hourlyRate, setHourlyRate] = useState<number | null>(null);
   const [hardCostsOn, setHardCostsOn] = useState(false);
   const [hardCostDays, setHardCostDays] = useState(1);
   const [markup, setMarkup] = useState(0);
@@ -231,7 +299,10 @@ export default function LiveEstimatePage() {
 
   const itemsTotal = costPlusTotal + preMarkedTotal;
 
-  const laborTotal = crewSize * workingDays * hoursPerDay * hourlyRate;
+  const laborTotal =
+    crewSize !== null && workingDays !== null && hoursPerDay !== null && hourlyRate !== null
+      ? crewSize * workingDays * hoursPerDay * hourlyRate
+      : 0;
 
   const hardCosts = useMemo(
     () =>
@@ -546,39 +617,39 @@ export default function LiveEstimatePage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-sm font-medium">Crew Size</Label>
-                  <NumericInput
+                  <NullableNumericInput
                     value={crewSize}
                     onChange={setCrewSize}
                     placeholder="e.g. 2"
-                    className="mt-1.5 text-muted-foreground"
+                    className="mt-1.5"
                   />
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Working Days</Label>
-                  <NumericInput
+                  <NullableNumericInput
                     value={workingDays}
                     onChange={setWorkingDays}
-                    placeholder="e.g. 3"
-                    className="mt-1.5 text-muted-foreground"
+                    placeholder="e.g. 1"
+                    className="mt-1.5"
                   />
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Hours per Day</Label>
-                  <NumericInput
+                  <NullableNumericInput
                     value={hoursPerDay}
                     onChange={setHoursPerDay}
                     placeholder="e.g. 8"
-                    className="mt-1.5 text-muted-foreground"
+                    className="mt-1.5"
                   />
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Hourly Rate</Label>
-                  <NumericInput
+                  <NullableNumericInput
                     value={hourlyRate}
                     onChange={setHourlyRate}
                     prefix="$"
                     placeholder="e.g. 45"
-                    className="mt-1.5 text-muted-foreground"
+                    className="mt-1.5"
                   />
                 </div>
               </div>

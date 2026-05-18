@@ -1558,45 +1558,42 @@ export default function ContactDetailPage({
                       </Button>
                     </div>
                   ) : (
-                    <div className="rounded-lg border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Title</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Total</TableHead>
-                            <TableHead>Created</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {bids.map((bid) => (
-                            <TableRow key={bid.id} className="cursor-pointer hover:bg-accent">
-                              <TableCell className="font-medium">
-                                {bid.title || "Untitled Bid"}
-                              </TableCell>
-                              <TableCell>
-                                <Badge
-                                  className={
-                                    bid.status === "accepted"
-                                      ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                                      : bid.status === "sent"
-                                        ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
-                                        : bid.status === "declined"
-                                          ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
-                                          : "bg-gray-100 text-gray-800 dark:bg-gray-800/40 dark:text-gray-400"
-                                  }
-                                >
-                                  {bid.status}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>${bid.bid_total?.toFixed(2) || "0.00"}</TableCell>
-                              <TableCell>
-                                {new Date(bid.created_date).toLocaleDateString()}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                    <div className="space-y-3">
+                      {bids.map((bid) => (
+                        <div
+                          key={bid.id}
+                          className="rounded-lg border bg-card px-4 py-3 grid grid-cols-1 md:grid-cols-[2fr_auto_1fr_1fr] gap-4 items-center cursor-pointer hover:bg-accent transition-colors"
+                        >
+                          <div className="font-bold text-foreground">
+                            {bid.title || "Untitled Bid"}
+                          </div>
+                          <Badge
+                            className={
+                              bid.status === "accepted"
+                                ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                                : bid.status === "sent"
+                                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
+                                  : bid.status === "declined"
+                                    ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                                    : "bg-gray-100 text-gray-800 dark:bg-gray-800/40 dark:text-gray-400"
+                            }
+                          >
+                            {bid.status}
+                          </Badge>
+                          <div>
+                            <div className="text-xs text-muted-foreground">Total</div>
+                            <div className="text-sm font-medium">
+                              ${bid.bid_total?.toFixed(2) || "0.00"}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">Created</div>
+                            <div className="text-sm font-medium">
+                              {new Date(bid.created_date).toLocaleDateString()}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </CardContent>

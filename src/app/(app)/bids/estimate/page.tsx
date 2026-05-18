@@ -24,11 +24,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select";
 import {
   Calculator,
@@ -274,6 +269,8 @@ export default function LiveEstimatePage() {
   const [showSendDialog, setShowSendDialog] = useState(false);
   const [sendContactId, setSendContactId] = useState("");
   const [sendTitle, setSendTitle] = useState("");
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
 
   /* ---- derived ---- */
   const availableItems = useMemo(() => {
@@ -801,6 +798,8 @@ export default function LiveEstimatePage() {
                 setShowSendDialog(true);
                 setSendContactId("");
                 setSendTitle("");
+                setClientSearch("");
+                setClientDropdownOpen(false);
               }}
             >
               <Send className="w-5 h-5 mr-2" />
@@ -816,7 +815,10 @@ export default function LiveEstimatePage() {
       {/* ============================================================ */}
       {/* SAVE & SEND DIALOG                                           */}
       {/* ============================================================ */}
-      <Dialog open={showSendDialog} onOpenChange={setShowSendDialog}>
+      <Dialog open={showSendDialog} onOpenChange={(open) => {
+        setShowSendDialog(open);
+        if (!open) { setClientSearch(""); setSendContactId(""); setClientDropdownOpen(false); }
+      }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Save Bid & Send to Client</DialogTitle>
@@ -828,18 +830,58 @@ export default function LiveEstimatePage() {
             </div>
             <div className="space-y-2">
               <Label>Client</Label>
-              <Select value={sendContactId} onValueChange={setSendContactId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a client..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {contacts.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.first_name} {c.last_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="relative">
+                <Input
+                  placeholder="Search clients..."
+                  value={clientSearch}
+                  onChange={(e) => {
+                    setClientSearch(e.target.value);
+                    setSendContactId("");
+                    setClientDropdownOpen(true);
+                  }}
+                  onFocus={() => setClientDropdownOpen(true)}
+                  onBlur={() => setClientDropdownOpen(false)}
+                />
+                {clientDropdownOpen && clientSearch.length > 0 && (() => {
+                  const q = clientSearch.toLowerCase();
+                  const matches = contacts.filter((c) => {
+                    const name = `${c.first_name} ${c.last_name}`.toLowerCase();
+                    return (
+                      name.includes(q) ||
+                      (c.email || "").toLowerCase().includes(q) ||
+                      (c.company_name || "").toLowerCase().includes(q)
+                    );
+                  });
+                  return (
+                    <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-48 overflow-y-auto">
+                      {matches.length === 0 ? (
+                        <p className="px-3 py-2 text-sm text-muted-foreground">No clients found</p>
+                      ) : (
+                        matches.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground flex flex-col"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setSendContactId(c.id);
+                              setClientSearch(`${c.first_name} ${c.last_name}`);
+                              setClientDropdownOpen(false);
+                            }}
+                          >
+                            <span className="font-medium">{c.first_name} {c.last_name}</span>
+                            {(c.email || c.company_name) && (
+                              <span className="text-xs text-muted-foreground">
+                                {[c.company_name, c.email].filter(Boolean).join(" · ")}
+                              </span>
+                            )}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Project Name</Label>

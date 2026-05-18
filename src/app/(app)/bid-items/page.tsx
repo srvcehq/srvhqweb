@@ -115,9 +115,6 @@ export default function BidItemsPage() {
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [newCategoryInput, setNewCategoryInput] = useState("");
   const [extraCategories, setExtraCategories] = useState<string[]>([]);
-  const [creatingUnit, setCreatingUnit] = useState(false);
-  const [newUnitInput, setNewUnitInput] = useState("");
-  const [extraUnits, setExtraUnits] = useState<string[]>([]);
 
   // Load items on mount
   React.useEffect(() => {
@@ -195,28 +192,16 @@ export default function BidItemsPage() {
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // If the inline category or unit input is still open, auto-confirm it
+    // If the inline category input is still open, auto-confirm it
     const resolvedCategory = creatingCategory && newCategoryInput.trim()
       ? newCategoryInput.trim()
       : itemForm.category;
-    const resolvedUnit = creatingUnit && newUnitInput.trim()
-      ? newUnitInput.trim()
-      : itemForm.unit;
 
     if (creatingCategory) { setCreatingCategory(false); setNewCategoryInput(""); }
-    if (creatingUnit)     { setCreatingUnit(false);     setNewUnitInput(""); }
-
-    // Supabase unit column only accepts the standard enum values — map any
-    // custom unit label to "other" so the constraint is never violated.
-    const validUnits: ItemsCatalog["unit"][] = ["ea", "sq_ft", "ton", "hr", "other"];
-    const safeUnit: ItemsCatalog["unit"] = validUnits.includes(resolvedUnit as ItemsCatalog["unit"])
-      ? resolvedUnit as ItemsCatalog["unit"]
-      : "other";
 
     const data = {
       ...itemForm,
       category: resolvedCategory,
-      unit: safeUnit,
       company_id: currentCompanyId,
       default_unit_cost: parseFloat(String(itemForm.default_unit_cost)) || 0,
       default_sell_price: parseFloat(String(itemForm.default_sell_price)) || 0,
@@ -256,16 +241,7 @@ export default function BidItemsPage() {
     setNewCategoryInput("");
   };
 
-  const confirmNewUnit = () => {
-    const name = newUnitInput.trim();
-    if (!name) return;
-    if (!extraUnits.includes(name)) setExtraUnits((p) => [...p, name]);
-    setItemForm((f) => ({ ...f, unit: name as ItemsCatalog["unit"] }));
-    setCreatingUnit(false);
-    setNewUnitInput("");
-  };
-
-  const handleAddCategory = () => {
+const handleAddCategory = () => {
     if (!newCategoryName.trim()) return;
     setSelectedCategory(newCategoryName.trim());
     setShowCategoryDialog(false);
@@ -527,8 +503,6 @@ export default function BidItemsPage() {
           if (!open) {
             setCreatingCategory(false);
             setNewCategoryInput("");
-            setCreatingUnit(false);
-            setNewUnitInput("");
           }
         }}>
           <DialogContent className="max-w-2xl">
@@ -599,52 +573,23 @@ export default function BidItemsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="item-unit">Unit *</Label>
-                  {creatingUnit ? (
-                    <div className="flex gap-1.5">
-                      <Input
-                        autoFocus
-                        value={newUnitInput}
-                        onChange={(e) => setNewUnitInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") { e.preventDefault(); confirmNewUnit(); }
-                          if (e.key === "Escape") { setCreatingUnit(false); setNewUnitInput(""); }
-                        }}
-                        placeholder="e.g. linear ft, pallet"
-                        className="flex-1"
-                      />
-                      <Button type="button" size="icon" variant="ghost" className="h-10 w-10 text-green-600 hover:text-green-700" onClick={confirmNewUnit}>
-                        <Check className="w-4 h-4" />
-                      </Button>
-                      <Button type="button" size="icon" variant="ghost" className="h-10 w-10" onClick={() => { setCreatingUnit(false); setNewUnitInput(""); }}>
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <Select
-                      value={itemForm.unit}
-                      onValueChange={(val) => {
-                        if (val === "__new_unit__") { setCreatingUnit(true); }
-                        else { setItemForm({ ...itemForm, unit: val as ItemsCatalog["unit"] }); }
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ea">Each</SelectItem>
-                        <SelectItem value="sq_ft">Sq Ft</SelectItem>
-                        <SelectItem value="ton">Ton</SelectItem>
-                        <SelectItem value="hr">Hour</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                        {extraUnits.map((u) => (
-                          <SelectItem key={u} value={u}>{u}</SelectItem>
-                        ))}
-                        <SelectItem value="__new_unit__" className="text-green-600 font-medium">
-                          ＋ Create new unit
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
+                  <Select
+                    value={itemForm.unit}
+                    onValueChange={(val) =>
+                      setItemForm({ ...itemForm, unit: val as ItemsCatalog["unit"] })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ea">Each</SelectItem>
+                      <SelectItem value="sq_ft">Sq Ft</SelectItem>
+                      <SelectItem value="ton">Ton</SelectItem>
+                      <SelectItem value="hr">Hour</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 

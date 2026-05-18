@@ -226,6 +226,17 @@ export default function SchedulePage() {
     },
   });
 
+  const uncancelMutation = useMutation({
+    mutationFn: async (visitId: string) => {
+      await db.MaintenanceVisit.update(visitId, { status: "scheduled" });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.maintenanceVisits(currentCompanyId) });
+      toast.success("Visit restored to scheduled.");
+      setDetailVisit(null);
+    },
+  });
+
   const assignMutation = useMutation({
     mutationFn: async (data: { visitId: string; employeeId: string }) => {
       await db.MaintenanceVisit.update(data.visitId, {
@@ -831,7 +842,15 @@ export default function SchedulePage() {
 
                 {/* Actions */}
                 <div className="flex flex-wrap gap-2 pt-4 border-t">
-                  {!isCompleted && (
+                  {detailVisit.status === "cancelled" ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => uncancelMutation.mutate(detailVisit.id)}
+                      disabled={uncancelMutation.isPending}
+                    >
+                      {uncancelMutation.isPending ? "Restoring..." : "Uncancel Job"}
+                    </Button>
+                  ) : !isCompleted && (
                     <>
                       <Button
                         className="bg-gradient-to-r from-green-500 to-emerald-600"

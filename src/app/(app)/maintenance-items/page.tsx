@@ -36,6 +36,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Pencil, Plus, Search, Trash2, Wrench } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
@@ -110,6 +111,7 @@ interface FormData {
   price_per_visit: string;
   suggested_min: string;
   suggested_max: string;
+  is_active: boolean;
 }
 
 const EMPTY_FORM: FormData = {
@@ -122,6 +124,7 @@ const EMPTY_FORM: FormData = {
   price_per_visit: "",
   suggested_min: "",
   suggested_max: "",
+  is_active: true,
 };
 
 /* ------------------------------------------------------------------ */
@@ -221,6 +224,7 @@ export default function MaintenanceItemsPage() {
       price_per_visit: item.price_per_visit?.toString() || "",
       suggested_min: item.suggested_min?.toString() || "",
       suggested_max: item.suggested_max?.toString() || "",
+      is_active: item.is_active,
     });
     setShowDialog(true);
   };
@@ -232,7 +236,7 @@ export default function MaintenanceItemsPage() {
       name: formData.name.trim(),
       description: formData.description.trim() || undefined,
       pricing_type: formData.pricing_type,
-      is_active: true,
+      is_active: formData.is_active,
       // Clear fields not relevant to selected pricing type
       unit_label: undefined,
       price_per_unit: undefined,
@@ -257,12 +261,6 @@ export default function MaintenanceItemsPage() {
         data.suggested_min = parseFloat(formData.suggested_min) || undefined;
         data.suggested_max = parseFloat(formData.suggested_max) || undefined;
         break;
-    }
-
-    // Preserve is_active on edit
-    if (editingId) {
-      const existing = items.find((i) => i.id === editingId);
-      if (existing) data.is_active = existing.is_active;
     }
 
     saveMutation.mutate(data);
@@ -505,13 +503,13 @@ export default function MaintenanceItemsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="flat_rate">
-                    Flat Rate &mdash; fixed price per visit
+                    Flat Rate (fixed) — same price per visit regardless of scope
                   </SelectItem>
                   <SelectItem value="per_unit">
-                    Per Unit &mdash; price per sqft, window, etc.
+                    Per Unit (fixed) — fixed price per countable unit
                   </SelectItem>
                   <SelectItem value="variable">
-                    Variable &mdash; set per client
+                    Variable (set per client) — price varies by customer
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -520,151 +518,136 @@ export default function MaintenanceItemsPage() {
             {/* ---- Conditional fields ---- */}
 
             {formData.pricing_type === "flat_rate" && (
-              <div className="space-y-2">
-                <Label htmlFor="mi-ppv">Price Per Visit *</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                    $
-                  </span>
-                  <Input
-                    id="mi-ppv"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formData.price_per_visit}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        price_per_visit: e.target.value,
-                      })
-                    }
-                    className="pl-7"
-                    placeholder="0.00"
-                  />
+              <div className="rounded-lg border bg-muted/40 p-4 space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="mi-ppv">Price Per Visit ($) *</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                      $
+                    </span>
+                    <Input
+                      id="mi-ppv"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.price_per_visit}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          price_per_visit: e.target.value,
+                        })
+                      }
+                      className="pl-7 bg-background"
+                      placeholder="0.00"
+                    />
+                  </div>
                 </div>
               </div>
             )}
 
             {formData.pricing_type === "per_unit" && (
-              <>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="mi-unit">Unit Label *</Label>
+              <div className="rounded-lg border bg-muted/40 p-4 space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="mi-unit">Unit Label *</Label>
+                  <Input
+                    id="mi-unit"
+                    value={formData.unit_label}
+                    onChange={(e) =>
+                      setFormData({ ...formData, unit_label: e.target.value })
+                    }
+                    placeholder="e.g. square foot, yard, bag"
+                    className="bg-background"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    What you&apos;re charging per, e.g. square foot, yard, bag
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="mi-ppu">Price Per Unit ($) *</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                      $
+                    </span>
                     <Input
-                      id="mi-unit"
-                      value={formData.unit_label}
+                      id="mi-ppu"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.price_per_unit}
                       onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          unit_label: e.target.value,
-                        })
+                        setFormData({ ...formData, price_per_unit: e.target.value })
                       }
-                      placeholder="e.g. sqft, window, yard"
+                      className="pl-7 bg-background"
+                      placeholder="0.00"
                     />
                   </div>
+                </div>
+              </div>
+            )}
+
+            {formData.pricing_type === "variable" && (
+              <div className="rounded-lg border bg-muted/40 p-4 space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Price will be customized for each client. Optionally set a suggested range.
+                </p>
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="mi-ppu">Price Per Unit *</Label>
+                    <Label htmlFor="mi-min">Suggested Min ($)</Label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                         $
                       </span>
                       <Input
-                        id="mi-ppu"
+                        id="mi-min"
                         type="number"
                         min="0"
                         step="0.01"
-                        value={formData.price_per_unit}
+                        value={formData.suggested_min}
                         onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            price_per_unit: e.target.value,
-                          })
+                          setFormData({ ...formData, suggested_min: e.target.value })
                         }
-                        className="pl-7"
-                        placeholder="0.00"
+                        className="pl-7 bg-background"
+                        placeholder="Optional"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="mi-max">Suggested Max ($)</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                        $
+                      </span>
+                      <Input
+                        id="mi-max"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formData.suggested_max}
+                        onChange={(e) =>
+                          setFormData({ ...formData, suggested_max: e.target.value })
+                        }
+                        className="pl-7 bg-background"
+                        placeholder="Optional"
                       />
                     </div>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="mi-mins">
-                    Avg. Minutes Per Unit
-                  </Label>
-                  <Input
-                    id="mi-mins"
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={formData.avg_minutes_per_unit}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        avg_minutes_per_unit: e.target.value,
-                      })
-                    }
-                    placeholder="e.g. 5"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Used for scheduling — estimates visit duration based on
-                    quantity
-                  </p>
-                </div>
-              </>
-            )}
-
-            {formData.pricing_type === "variable" && (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="mi-min">Suggested Min</Label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                      $
-                    </span>
-                    <Input
-                      id="mi-min"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.suggested_min}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          suggested_min: e.target.value,
-                        })
-                      }
-                      className="pl-7"
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="mi-max">Suggested Max</Label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                      $
-                    </span>
-                    <Input
-                      id="mi-max"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.suggested_max}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          suggested_max: e.target.value,
-                        })
-                      }
-                      className="pl-7"
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-                <p className="col-span-2 text-xs text-muted-foreground -mt-2">
-                  Price is set per client inside each maintenance plan
-                </p>
               </div>
             )}
+
+            {/* Active checkbox */}
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="mi-active"
+                checked={formData.is_active}
+                onCheckedChange={(checked) =>
+                  setFormData({ ...formData, is_active: checked === true })
+                }
+              />
+              <Label htmlFor="mi-active" className="font-normal cursor-pointer">
+                Active (available for selection in maintenance plans)
+              </Label>
+            </div>
 
             {/* Actions */}
             <div className="flex justify-end gap-3 pt-4 border-t">
